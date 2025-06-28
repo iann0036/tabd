@@ -15,6 +15,7 @@ var globalFileState: {
 		changes: ExtendedRange[],
 		savePath?: string,
 		pasteRanges: ExtendedRange[],
+		loadTimestamp?: number,
 	},
 } = {};
 
@@ -43,13 +44,13 @@ export function activate(context: vscode.ExtensionContext) {
 	const notifyPaste = function (d: vscode.TextDocument, ranges: readonly vscode.Range[]) {
 		return editLock.runExclusive(async () => {
 			let fileState = globalFileState[fsPath(d.uri)];
+			const now = Date.now();
 			if (!fileState) {
-				fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [] };
+				fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [], loadTimestamp: now-1 };
 			}
 
 			for (const range of ranges) {
 				// Create a new range for the paste operation
-				const now = Date.now();
 				const pasteRange = new ExtendedRange(range.start, range.end, ExtendedRangeType.Paste, now);
 				fileState.pasteRanges = fileState.pasteRanges.filter(p => p.getCreationTimestamp() > now - 400); // memory cleanup
 				fileState.pasteRanges.push(pasteRange);
@@ -69,7 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
 				let updatedRanges: ExtendedRange[];
 
 				if (!fileState) {
-					fileState = globalFileState[fsPath(e.document.uri)] = { changes: [], pasteRanges: [] };
+					fileState = globalFileState[fsPath(e.document.uri)] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
 					updatedRanges = [];
 				} else {
 					updatedRanges = getUpdatedRanges(
@@ -158,13 +159,15 @@ export function activate(context: vscode.ExtensionContext) {
 					if (fileState.savePath) {
 						fs.writeFileSync(fileState.savePath, JSON.stringify({
 							version: 1,
-							changes: fileState.changes.map(change => ({
-								start: change.start,
-								end: change.end,
-								type: change.getType(),
-								creationTimestamp: change.getCreationTimestamp(),
-								author: change.getAuthor() || currentUser || 'an unknown user', // Use the current user if not set
-							})),
+							changes: fileState.changes
+								.filter(change => change.getCreationTimestamp() > (fileState.loadTimestamp || 0))
+								.map(change => ({
+									start: change.start,
+									end: change.end,
+									type: change.getType(),
+									creationTimestamp: change.getCreationTimestamp(),
+									author: change.getAuthor() || currentUser || 'an unknown user', // Use the current user if not set
+								})),
 						}));
 						return;
 					}
@@ -199,13 +202,15 @@ export function activate(context: vscode.ExtensionContext) {
 					// TODO: Add a whole file hash to ensure the file state is valid
 					fs.writeFileSync(fileChangeRecordPath, JSON.stringify({
 						version: 1,
-						changes: fileState.changes.map(change => ({
-							start: change.start,
-							end: change.end,
-							type: change.getType(),
-							creationTimestamp: change.getCreationTimestamp(),
-							author: change.getAuthor() || currentUser || 'an unknown user', // Use the current user if not set
-						})),
+						changes: fileState.changes
+							.filter(change => change.getCreationTimestamp() > (fileState.loadTimestamp || 0))
+							.map(change => ({
+								start: change.start,
+								end: change.end,
+								type: change.getType(),
+								creationTimestamp: change.getCreationTimestamp(),
+								author: change.getAuthor() || currentUser || 'an unknown user', // Use the current user if not set
+							})),
 					}));
 
 					// Update the global file state
@@ -310,7 +315,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 		return; // Already loaded
 	}
 
-	globalFileState[filePath] = { changes: [], pasteRanges: [] };
+	globalFileState[filePath] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
 
 	// Check is Git is initialized at the workspace root
 	const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
