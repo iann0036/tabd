@@ -43,6 +43,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const notifyPaste = function (d: vscode.TextDocument, ranges: readonly vscode.Range[]) {
 		return editLock.runExclusive(async () => {
+			// Check if tracking is disabled
+			const config = vscode.workspace.getConfiguration('tabd');
+			const disabled = config.get<boolean>('disabled', false);
+			if (disabled) {
+				return;
+			}
+
 			let fileState = globalFileState[fsPath(d.uri)];
 			const now = Date.now();
 			if (!fileState) {
@@ -62,6 +69,13 @@ export function activate(context: vscode.ExtensionContext) {
 		// Register the text editor change listener
 		vscode.workspace.onDidChangeTextDocument(e => {
 			if (e.document.uri.scheme !== 'file' || !shouldProcessFile(e.document.uri)) {
+				return;
+			}
+
+			// Check if tracking is disabled
+			const config = vscode.workspace.getConfiguration('tabd');
+			const disabled = config.get<boolean>('disabled', false);
+			if (disabled) {
 				return;
 			}
 
@@ -97,10 +111,16 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!editor || editor.document.uri.scheme !== 'file' || !shouldProcessFile(editor.document.uri)) {
 				return;
 			}
+			
+			// Check if tracking is disabled
+			const config = vscode.workspace.getConfiguration('tabd');
+			const disabled = config.get<boolean>('disabled', false);
+			if (disabled) {
+				return;
+			}
 
 			loadGlobalFileStateForDocumentFromDisk(editor.document);
-
-			const config = vscode.workspace.getConfiguration('tabd');
+			
 			const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
 			
 			if (showBlameByDefault) {
@@ -131,6 +151,13 @@ export function activate(context: vscode.ExtensionContext) {
 		// Register the listener for saving text documents
 		vscode.workspace.onDidSaveTextDocument(e => {
 			if (e.uri.scheme !== 'file' || !shouldProcessFile(e.uri)) {
+				return;
+			}
+			
+			// Check if tracking is disabled
+			const config = vscode.workspace.getConfiguration('tabd');
+			const disabled = config.get<boolean>('disabled', false);
+			if (disabled) {
 				return;
 			}
 			
@@ -240,6 +267,15 @@ export function activate(context: vscode.ExtensionContext) {
 			
 			// Toggle the configuration value
 			await config.update('showBlameByDefault', !currentValue, vscode.ConfigurationTarget.Global);
+		}),
+
+		// Register the command to enable/disable change tracking
+		vscode.commands.registerCommand('tabd.toggleEnabled', async () => {
+			const config = vscode.workspace.getConfiguration('tabd');
+			const currentValue = config.get<boolean>('disabled', false);
+			
+			// Toggle the configuration value
+			await config.update('disabled', !currentValue, vscode.ConfigurationTarget.Global);
 		}),
 	);
 	
