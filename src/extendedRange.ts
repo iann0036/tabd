@@ -11,16 +11,19 @@ export enum ExtendedRangeType {
 export class ExtendedRange extends vscode.Range {
     private readonly creationTimestamp: number;
     private rangeType: ExtendedRangeType;
+    private author: string;
 
     constructor(
         start: vscode.Position,
         end: vscode.Position,
         rangeType: ExtendedRangeType = ExtendedRangeType.Unknown,
         creationTimestamp: number = Date.now(),
+        author: string = '',
     ) {
         super(start, end);
         this.rangeType = rangeType;
         this.creationTimestamp = creationTimestamp;
+        this.author = author;
     }
 
     getType(): ExtendedRangeType {
@@ -29,5 +32,9 @@ export class ExtendedRange extends vscode.Range {
 
     getCreationTimestamp(): number {
         return this.creationTimestamp;
+    }
+
+    getAuthor(): string {
+        return this.author;
     }
 }

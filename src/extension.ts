@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { getUpdatedRanges } from "./positionalTracking";
 import { Mutex } from 'async-mutex';
 import { fsPath, uniqueFileName, shouldProcessFile } from './utils';
@@ -22,12 +23,15 @@ interface SerializedChange {
 	end: { line: number; character: number };
 	type: ExtendedRangeType;
 	creationTimestamp: number;
+	author?: string;
 }
 
 interface SerializedFileState {
 	version: number;
 	changes: SerializedChange[];
 }
+
+let currentUser: string = "";
 
 export function activate(context: vscode.ExtensionContext) {
 	// Exclude the .tabd directory from the file explorer
@@ -140,6 +144,16 @@ export function activate(context: vscode.ExtensionContext) {
 						return;
 					}
 
+					const workspaceFolder = vscode.workspace.getWorkspaceFolder(e.uri);
+					if (!workspaceFolder) {
+						console.warn(`No workspace folder found for ${e.uri.fsPath}. Cannot save file state.`);
+						return;
+					}
+
+					if (currentUser === "") {
+						currentUser = getCurrentGitUser(workspaceFolder);
+					}
+
 					// Write to existing file if it exists
 					if (fileState.savePath) {
 						fs.writeFileSync(fileState.savePath, JSON.stringify({
@@ -149,18 +163,13 @@ export function activate(context: vscode.ExtensionContext) {
 								end: change.end,
 								type: change.getType(),
 								creationTimestamp: change.getCreationTimestamp(),
+								author: change.getAuthor() || currentUser || 'an unknown user', // Use the current user if not set
 							})),
 						}));
 						return;
 					}
 
 					// Check is Git is initialized at the workspace root
-					const workspaceFolder = vscode.workspace.getWorkspaceFolder(e.uri);
-					if (!workspaceFolder) {
-						console.warn(`No workspace folder found for ${e.uri.fsPath}. Cannot save file state.`);
-						return;
-					}
-
 					const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
 					const isGitRepo = fs.existsSync(gitPath);
 					
@@ -195,6 +204,7 @@ export function activate(context: vscode.ExtensionContext) {
 							end: change.end,
 							type: change.getType(),
 							creationTimestamp: change.getCreationTimestamp(),
+							author: change.getAuthor() || currentUser || 'an unknown user', // Use the current user if not set
 						})),
 					}));
 
@@ -308,6 +318,45 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 
 export function deactivate() {}
 
+/**
+ * Get the current Git user name
+ * @param workspaceFolder The workspace folder containing the Git repository
+ * @returns The current Git user name or 'You' if unable to determine
+ */
+function getCurrentGitUser(workspaceFolder: vscode.WorkspaceFolder): string {
+	try {
+		const userCommand = 'git config user.name';
+		const currentUser = execSync(userCommand, {
+			cwd: workspaceFolder.uri.fsPath,
+			encoding: 'utf8',
+			timeout: 2000,
+		}).trim();
+		
+		if (currentUser && currentUser.trim().length > 1) {
+			return currentUser;
+		}
+	} catch (error) {
+		console.warn('Failed to get current Git user:', error);
+	}
+
+	try {
+		const userCommand = 'git config user.email';
+		const currentUser = execSync(userCommand, {
+			cwd: workspaceFolder.uri.fsPath,
+			encoding: 'utf8',
+			timeout: 2000,
+		}).trim();
+		
+		if (currentUser && currentUser.trim().length > 1) {
+			return currentUser;
+		}
+	} catch (error) {
+		console.warn('Failed to get current Git user:', error);
+	}
+
+	return '';
+}
+
 function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | undefined) {
 	if (!document) {
 		return;
@@ -328,6 +377,11 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 	const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
 	if (!workspaceFolder) {
 		return;
+	}
+
+	// Set the current user if not already set
+	if (currentUser === "") {
+		currentUser = getCurrentGitUser(workspaceFolder) || "";
 	}
 
 	const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
@@ -352,10 +406,10 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 		return; // No file state found
 	}
 
-	let updatedRanges: ExtendedRange[] = [];
-
 	// Sort file change records by filename (which includes timestamp) to process chronologically
 	fileChangeRecords.sort();
+
+	let updatedRanges: ExtendedRange[] = [];
 
 	for (const fileChangeRecordPath of fileChangeRecords) {
 		try {
@@ -364,15 +418,16 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 				continue; // Unsupported version
 			}
 			
-			const newChanges = fileState.changes.map(change => 
-				new ExtendedRange(
+			const newChanges = fileState.changes.map(change => {
+				return new ExtendedRange(
 					new vscode.Position(change.start.line, change.start.character),
 					new vscode.Position(change.end.line, change.end.character),
 					change.type,
-					change.creationTimestamp
-				)
-			);
-			
+					change.creationTimestamp,
+					change.author || "",
+				);
+			});
+
 			updatedRanges = mergeRangesSequentially(updatedRanges, newChanges);
 		} catch (error) {
 			console.warn(`Failed to load file state from ${fileChangeRecordPath}:`, error);

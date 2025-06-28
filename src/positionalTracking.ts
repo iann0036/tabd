@@ -141,7 +141,7 @@ const getUpdatedRanges = (
                      newRangeEnd = aiChangeRangeStart;
                   }
 
-                  additionalRanges.push(new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp()));
+                  additionalRanges.push(new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor()));
                   toUpdateRanges[i] = null;
                } else if (onDeletion === 'remove') {
                   toUpdateRanges[i] = null;
@@ -160,7 +160,7 @@ const getUpdatedRanges = (
                   if (newRangeEnd.isBefore(newRangeStart)) {
                      toUpdateRanges[i] = null;
                   } else {
-                     toUpdateRanges[i] = new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp());
+                     toUpdateRanges[i] = new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor());
                   }
                }
             }
@@ -184,9 +184,9 @@ const getUpdatedRanges = (
                   toUpdateRanges.splice(
                      i + 1,
                      0,
-                     new ExtendedRange(change.range.start, updatedRange.end, updatedRange.getType(), updatedRange.getCreationTimestamp())
+                     new ExtendedRange(change.range.start, updatedRange.end, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor())
                   );
-                  toUpdateRanges[i] = new ExtendedRange(updatedRange.start, change.range.start, updatedRange.getType(), updatedRange.getCreationTimestamp());
+                  toUpdateRanges[i] = new ExtendedRange(updatedRange.start, change.range.start, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor());
                }
             }
          }
@@ -209,7 +209,7 @@ const getUpdatedRanges = (
             updatedRangeEnd = getUpdatedPosition(finalRange.end, change);
          }
 
-         toUpdateRanges[i] = new ExtendedRange(updatedRangeStart, updatedRangeEnd, finalRange.getType(), finalRange.getCreationTimestamp());
+         toUpdateRanges[i] = new ExtendedRange(updatedRangeStart, updatedRangeEnd, finalRange.getType(), finalRange.getCreationTimestamp(), finalRange.getAuthor());
       }
    }
    
