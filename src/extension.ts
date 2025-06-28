@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { execSync } from 'child_process';
 import { getUpdatedRanges } from "./positionalTracking";
 import { Mutex } from 'async-mutex';
@@ -35,7 +36,7 @@ interface SerializedFileState {
 let currentUser: string = "";
 
 export function activate(context: vscode.ExtensionContext) {
-	// Exclude the .tabd directory from the file explorer
+	// Always exclude the .tabd directory from the file explorer
 	const files = vscode.workspace.getConfiguration('files');
 	const exclude = files.get('exclude') as Record<string, boolean>;
 	exclude['**/.tabd'] = true;
@@ -146,6 +147,26 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 				}
 			}
+			
+			if (e.affectsConfiguration('tabd.storage')) {
+				// Clear global file state when storage type changes to force reload from new location
+				globalFileState = {};
+				
+				// Reload file state for active editor
+				if (vscode.window.activeTextEditor) {
+					loadGlobalFileStateForDocumentFromDisk(vscode.window.activeTextEditor.document);
+					const config = vscode.workspace.getConfiguration('tabd');
+					const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
+					
+					if (showBlameByDefault) {
+						const filePath = fsPath(vscode.window.activeTextEditor.document.uri);
+						const fileState = globalFileState[filePath];
+						if (fileState && fileState.changes.length > 0) {
+							triggerDecorationUpdate(vscode.window.activeTextEditor.document, fileState.changes);
+						}
+					}
+				}
+			}
 		}),
 
 		// Register the listener for saving text documents
@@ -178,7 +199,10 @@ export function activate(context: vscode.ExtensionContext) {
 						return;
 					}
 
-					if (currentUser === "") {
+					const config = vscode.workspace.getConfiguration('tabd');
+					const storageType = config.get<string>('storage', 'repository');
+
+					if (currentUser === "" && storageType === 'repository') {
 						currentUser = getCurrentGitUser(workspaceFolder);
 					}
 
@@ -193,32 +217,33 @@ export function activate(context: vscode.ExtensionContext) {
 									end: change.end,
 									type: change.getType(),
 									creationTimestamp: change.getCreationTimestamp(),
-									author: change.getAuthor() || currentUser || 'an unknown user', // Use the current user if not set
+									author: change.getAuthor() || currentUser || (storageType === 'repository' ? 'an unknown user' : ''),
 								})),
 						}));
 						return;
 					}
 
-					// Check is Git is initialized at the workspace root
-					const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
-					const isGitRepo = fs.existsSync(gitPath);
-					
-					if (!isGitRepo) {
-						console.warn('No Git repository found. Skipping file state save.');
-						return;
+					// Check is Git is initialized at the workspace root (only required for repository storage)					
+					if (storageType === 'repository') {
+						const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
+						const isGitRepo = fs.existsSync(gitPath);
+						
+						if (!isGitRepo) {
+							console.warn('No Git repository found. Skipping file state save.');
+							return;
+						}
 					}
 					
-					// Create .tabd/
-					const tabdDir = path.join(workspaceFolder.uri.fsPath, '.tabd');
-					if (!fs.existsSync(tabdDir)) {
-						fs.mkdirSync(tabdDir, { recursive: true });
-						// TODO: Make a README.md file in the .tabd directory
+					// Get the appropriate storage directory
+					const baseStorageDir = getStorageDirectory(workspaceFolder, e);
+					if (!fs.existsSync(baseStorageDir)) {
+						fs.mkdirSync(baseStorageDir, { recursive: true });
+						// TODO: Make a README.md file in the storage directory
 					}
 
 					// Write the file state to a JSON file
-					const relativePath = vscode.workspace.asRelativePath(e.uri, false);
-					const fileChangeRecordDir = path.join(workspaceFolder.uri.fsPath, '.tabd', 'log', relativePath);
-					const fileChangeRecordPath = path.join(workspaceFolder.uri.fsPath, '.tabd', 'log', relativePath, uniqueFileName());
+					const fileChangeRecordDir = getLogDirectory(workspaceFolder, e);
+					const fileChangeRecordPath = path.join(fileChangeRecordDir, uniqueFileName());
 					if (!fs.existsSync(fileChangeRecordDir)) {
 						fs.mkdirSync(fileChangeRecordDir, { recursive: true });
 					}
@@ -236,7 +261,7 @@ export function activate(context: vscode.ExtensionContext) {
 								end: change.end,
 								type: change.getType(),
 								creationTimestamp: change.getCreationTimestamp(),
-								author: change.getAuthor() || currentUser || 'an unknown user', // Use the current user if not set
+								author: change.getAuthor() || currentUser || (storageType === 'repository' ? 'an unknown user' : ''),
 							})),
 					}));
 
@@ -359,20 +384,25 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 		return;
 	}
 
-	// Set the current user if not already set
-	if (currentUser === "") {
-		currentUser = getCurrentGitUser(workspaceFolder) || "";
-	}
-
-	const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
-	const isGitRepo = fs.existsSync(gitPath);
+	// Check is Git is initialized at the workspace root (only required for repository storage)
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
 	
-	if (!isGitRepo) {
-		return;
+	if (storageType === 'repository') {
+		// Set the current user if not already set
+		if (currentUser === "") {
+			currentUser = getCurrentGitUser(workspaceFolder) || "";
+		}
+
+		const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
+		const isGitRepo = fs.existsSync(gitPath);
+		
+		if (!isGitRepo) {
+			return;
+		}
 	}
 
-	const relativePath = vscode.workspace.asRelativePath(document.uri, false);
-	const fileChangeRecordDir = path.join(workspaceFolder.uri.fsPath, '.tabd', 'log', relativePath);
+	const fileChangeRecordDir = getLogDirectory(workspaceFolder, document);
 
 	if (!fs.existsSync(fileChangeRecordDir)) {
 		return; // No file state found
@@ -415,4 +445,30 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 	}
 
 	globalFileState[filePath].changes = updatedRanges;
+}
+
+function getStorageDirectory(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument): string {
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
+	
+	if (storageType === 'homeDirectory') {
+		// Create sanitized workspace path for home directory storage
+		const workspacePath = workspaceFolder.uri.fsPath;
+		const sanitizedPath = workspacePath
+			.replace(/[^a-zA-Z0-9]/g, '_')
+			.replace(/_+/g, '_')
+			.replace(/^_|_$/g, '');
+		
+		return path.join(os.homedir(), '.tabd', 'multilog', sanitizedPath);
+	} else if (storageType === 'repository') {
+		return path.join(workspaceFolder.uri.fsPath, '.tabd');
+	} else {
+		throw new Error(`Unsupported storage type: ${storageType}`);
+	}
+}
+
+function getLogDirectory(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument): string {
+	const baseStorageDir = getStorageDirectory(workspaceFolder, document);
+	const relativePath = vscode.workspace.asRelativePath(document.uri, false);
+	return path.join(baseStorageDir, 'log', relativePath);
 }

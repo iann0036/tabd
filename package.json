@@ -41,6 +41,19 @@
           "type": "boolean",
           "default": false,
           "description": "Disable all Tab'd features"
+        },
+        "tabd.storage": {
+          "type": "string",
+          "enum": [
+            "repository",
+            "homeDirectory"
+          ],
+          "enumDescriptions": [
+            "Store data in the repository",
+            "Store data in your home directory"
+          ],
+          "default": "repository",
+          "description": "Choose where to store Tab'd data"
         }
       }
     }
