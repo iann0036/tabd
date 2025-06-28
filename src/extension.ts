@@ -4,8 +4,6 @@ import { Mutex } from 'async-mutex';
 import { fsPath } from './utils';
 import { ExtendedRange, ExtendedRangeType } from './extendedRange';
 
-const debugOutputChannel = vscode.window.createOutputChannel("Debug Tabd Repo Validation");
-
 const userEditDecorator = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "#00ffff33",
 	//isWholeLine: true,
@@ -45,8 +43,6 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		console.log(JSON.stringify(e.contentChanges, null, 2));
-
 		return editLock.runExclusive(async () => {
 			let fileState = globalFileState[fsPath(e.document.uri)];
 			let updatedRanges: ExtendedRange[];
@@ -61,7 +57,6 @@ export function activate(context: vscode.ExtensionContext) {
 					{
 						onDeletion: 'shrink',
 						onAddition: 'split',
-						outputChannel: debugOutputChannel,
 					},
 					e.reason,
 					e.document,

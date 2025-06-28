@@ -1,69 +1,6 @@
 import * as vscode from 'vscode';
 import { ExtendedRange, ExtendedRangeType } from './extendedRange';
 
-const debugLogsOnDebugConsole = (
-   changes: vscode.TextDocumentContentChangeEvent[],
-   toUpdateRanges: ExtendedRange[],
-   updatedRanges: ExtendedRange[]
-): void => {
-   console.log(`-------------------`);
-   console.log(`-------------------`);
-
-   console.log(`Change ranges`);
-   for (const change of changes) {
-      console.log(`    start: ${change.range.start.line} ${change.range.start.character}`);
-      console.log(`    end: ${change.range.end.line} ${change.range.end.character}`);
-      console.log(`    -----`);
-   }
-
-   console.log('To update ranges');
-   for (const range of toUpdateRanges) {
-      console.log(`    start: ${range.start.line} ${range.start.character}`);
-      console.log(`    end: ${range.end.line} ${range.end.character}`);
-      console.log(`    -----`);
-   }
-
-   console.log('Updated ranges');
-   for (const range of updatedRanges) {
-      console.log(`    start: ${range.start.line} ${range.start.character}`);
-      console.log(`    end: ${range.end.line} ${range.end.character}`);
-      console.log(`    -----`);
-   }
-};
-
-const debugLogsOnExtensionChannel = (
-   changes: vscode.TextDocumentContentChangeEvent[],
-   toUpdateRanges: ExtendedRange[],
-   updatedRanges: ExtendedRange[],
-   outputChannel: vscode.OutputChannel
-): void => {
-   outputChannel.appendLine(`-------------------`);
-   outputChannel.appendLine(`-------------------`);
-
-   outputChannel.appendLine(`Change ranges`);
-   for (const change of changes) {
-      outputChannel.appendLine(
-         `    start: ${change.range.start.line} ${change.range.start.character}`
-      );
-      outputChannel.appendLine(`    end: ${change.range.end.line} ${change.range.end.character}`);
-      outputChannel.appendLine(`    -----`);
-   }
-
-   outputChannel.appendLine('To update ranges');
-   for (const range of toUpdateRanges) {
-      outputChannel.appendLine(`    start: ${range.start.line} ${range.start.character}`);
-      outputChannel.appendLine(`    end: ${range.end.line} ${range.end.character}`);
-      outputChannel.appendLine(`    -----`);
-   }
-
-   outputChannel.appendLine('Updated ranges');
-   for (const range of updatedRanges) {
-      outputChannel.appendLine(`    start: ${range.start.line} ${range.start.character}`);
-      outputChannel.appendLine(`    end: ${range.end.line} ${range.end.character}`);
-      outputChannel.appendLine(`    -----`);
-   }
-};
-
 const getUpdatedPosition = (
    position: vscode.Position,
    change: vscode.TextDocumentContentChangeEvent
@@ -138,10 +75,8 @@ const getUpdatedRanges = (
 
    let onDeletion: OnDeletion | undefined = undefined;
    let onAddition: OnAddition | undefined = undefined;
-   let debugConsole: boolean | undefined = undefined;
-   let outputChannel: vscode.OutputChannel | undefined = undefined;
    if (options) {
-      ({ onDeletion, onAddition, debugConsole, outputChannel } = options);
+      ({ onDeletion, onAddition } = options);
    }
    if (!onDeletion) {
       onDeletion = 'shrink';
@@ -179,8 +114,22 @@ const getUpdatedRanges = (
          ) {
             if (!change.range.start.isEqual(change.range.end)) {
                if (isAI) {
-                  console.log("** isAI addition");
-                  additionalRanges.push(new ExtendedRange(change.range.start, change.range.end, ExtendedRangeType.Unknown, Date.now()));
+                  let newRangeStart = currentRange.start;
+                  let newRangeEnd = currentRange.end;
+
+                  let aiChangeRangeStart = change.range.end;
+                  let aiChangeRangeEnd = document.positionAt(document.offsetAt(change.range.start) + change.text.length);
+                  let aiChangeRange = new vscode.Range(aiChangeRangeStart, aiChangeRangeEnd);
+
+                  if (aiChangeRange.contains(currentRange.start)) {
+                     newRangeStart = aiChangeRangeEnd;
+                  }
+
+                  if (aiChangeRange.contains(currentRange.end)) {
+                     newRangeEnd = aiChangeRangeStart;
+                  }
+
+                  additionalRanges.push(new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp()));
                   toUpdateRanges[i] = null;
                } else if (onDeletion === 'remove') {
                   toUpdateRanges[i] = null;
@@ -195,8 +144,7 @@ const getUpdatedRanges = (
                   if (change.range.contains(currentRange.end)) {
                      newRangeEnd = change.range.start;
                   }
-               
-                  console.log("** NOT isAI addition");
+                  
                   if (newRangeEnd.isBefore(newRangeStart)) {
                      toUpdateRanges[i] = null;
                   } else {
@@ -252,16 +200,7 @@ const getUpdatedRanges = (
          toUpdateRanges[i] = new ExtendedRange(updatedRangeStart, updatedRangeEnd, finalRange.getType(), finalRange.getCreationTimestamp());
       }
    }
-
-   // Add additional ranges to the toUpdateRanges
-   // TODO: does this need to be sorted?
-   if (additionalRanges.length > 0) {
-      let toUpdateRangesUnordered = toUpdateRanges.filter((range): range is ExtendedRange => range !== null).concat(additionalRanges);
-      toUpdateRanges = [...toUpdateRangesUnordered].sort((change1, change2) =>
-         change2.start.compareTo(change1.start)
-      );
-   }
-
+   
    for (let i = 0; i < toUpdateRanges.length - 1; i++) {
       const rangeI = toUpdateRanges[i];
       if (!rangeI) {
@@ -287,10 +226,12 @@ const getUpdatedRanges = (
       }
    }
 
-   const updatedRanges = toUpdateRanges.filter((range): range is ExtendedRange => range !== null);
+   let updatedRanges = toUpdateRanges.filter((range): range is ExtendedRange => range !== null);
 
-   // debugConsole && debugLogsOnDebugConsole(sortedChanges, ranges, updatedRanges);
-   outputChannel && debugLogsOnExtensionChannel(sortedChanges, ranges, updatedRanges, outputChannel);
+   // Add additional ranges
+   if (additionalRanges.length > 0) {
+     updatedRanges = updatedRanges.concat(additionalRanges);
+   }
 
    return updatedRanges;
 };
