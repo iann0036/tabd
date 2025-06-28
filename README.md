@@ -1,6 +1,6 @@
-# Tab'd - AI-Assisted Code Tracking for VS Code
+# Tab'd
 
-Track and visualize your code editing patterns with Tab'd - a VS Code extension that monitors AI-assisted coding, copy-paste operations, and manual edits to help you understand how your code evolves.
+Bring transparency to modern development with Tab'd - a VS Code extension that tracks and visualizes AI-assisted coding, copy-paste operations, and manual edits. Help your team understand code authorship and maintain accountability in an era of AI-powered development, while gaining insights into your own coding patterns.
 
 >**Note:** This extension is in active development. Please [raise an issue](https://github.com/iann0036/tabd/issues) if you experience any problems.
 
@@ -13,8 +13,8 @@ Tab'd provides intelligent tracking and visualization of different types of code
 - **Manual Edit Recognition** - Distinguishes between user-typed code and other edit types
 - **Undo/Redo Tracking** - Tracks code changes from undo and redo operations
 - **Visual Code Attribution** - Color-coded highlighting shows the source of each code section
-- **Persistent History** - Maintains edit history across VS Code sessions
 - **Team Transparency** - Optionally share edit attribution with team members when using the "Repository" storage option, allowing others to see where AI-generated or pasted code was used
+- **Persistent History** - Maintains edit history across VS Code sessions
 
 ### Visual Indicators
 
