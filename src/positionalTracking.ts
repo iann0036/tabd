@@ -108,7 +108,7 @@ const getUpdatedRanges = (
          if (!change.range.start.isEqual(change.range.end)) { // TODO: and if the delta text matches
             isAI = true;
          }
-         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIModification, Date.now()));
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIGenerated, Date.now()));
       }
       //
 

@@ -6,38 +6,7 @@ import { Mutex } from 'async-mutex';
 import { fsPath, uniqueFileName, shouldProcessFile } from './utils';
 import { ExtendedRange, ExtendedRangeType } from './extendedRange';
 import { PasteEditProvider } from './pasteEditProvider';
-
-const userEditDecorator = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "#00ffff33",
-	//isWholeLine: true,
-	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
-});
-
-const aiModificationDecorator = vscode.window.createTextEditorDecorationType({
-	//backgroundColor: "#00ff0033",
-	outlineColor: "#00ff0033",
-	outline: "1px solid",
-	//isWholeLine: true,
-	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
-});
-
-const undoRedoDecorator = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "#0000ff33",
-	//isWholeLine: true,
-	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
-});
-
-const unknownDecorator = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "#dddddd33",
-	//isWholeLine: true,
-	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
-});
-
-const pasteDecorator = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "#ff00ff33",
-	//isWholeLine: true,
-	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
-});
+import { triggerDecorationUpdate, forceShowDecorations } from './decorators';
 
 var editLock = new Mutex();
 var globalFileState: {
@@ -47,39 +16,6 @@ var globalFileState: {
 		pasteRanges: ExtendedRange[],
 	},
 } = {};
-
-function triggerDecorationUpdate(d: vscode.TextDocument, updatedRanges: ExtendedRange[]) {
-	const config = vscode.workspace.getConfiguration('tabd');
-	const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
-
-	if (showBlameByDefault) {
-		forceShowDecorations(d, updatedRanges);
-		return;
-	}
-	
-	// Clear decorations when blame is not shown by default
-	for (const editor of vscode.window.visibleTextEditors) {
-		if (editor.document === d) {
-			editor.setDecorations(userEditDecorator, []);
-			editor.setDecorations(aiModificationDecorator, []);
-			editor.setDecorations(undoRedoDecorator, []);
-			editor.setDecorations(pasteDecorator, []);
-			editor.setDecorations(unknownDecorator, []);
-		}
-	}
-}
-
-function forceShowDecorations(d: vscode.TextDocument, updatedRanges: ExtendedRange[]) {
-	for (const editor of vscode.window.visibleTextEditors) {
-		if (editor.document === d) {
-			editor.setDecorations(userEditDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UserEdit));
-			editor.setDecorations(aiModificationDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.AIModification));
-			editor.setDecorations(undoRedoDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UndoRedo));
-			editor.setDecorations(pasteDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Paste));
-			editor.setDecorations(unknownDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Unknown));
-		}
-	}
-}
 
 export function activate(context: vscode.ExtensionContext) {
 	// Exclude the .tabd directory from the file explorer
@@ -268,33 +204,12 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 
 		// Register the command to toggle the blame
-		vscode.commands.registerCommand('tabd.blame', async () => {
-			const editor = vscode.window.activeTextEditor;
-			if (!editor) {
-				vscode.window.showErrorMessage("No active text editor currently open.");
-				return;
-			} else if (!editor || editor.document.uri.scheme !== 'file' || !shouldProcessFile(editor.document.uri)) {
-				vscode.window.showErrorMessage("No active text editor or unsupported file type.");
-				return;
-			}
-			const filePath = fsPath(editor.document.uri);
-			const fileState = globalFileState[filePath];
-			if (!fileState) {
-				//vscode.window.showErrorMessage("No changes recorded for this file.");
-				return;
-			}
-			const changes = fileState.changes;
-			if (changes.length === 0) {
-				//vscode.window.showInformationMessage("No changes recorded for this file.");
-				return;
-			}
-			const changeInfo = changes.map(change => {
-				return `Change from ${change.start.line + 1}:${change.start.character} to ${change.end.line + 1}:${change.end.character} - Type: ${change.getType()} - Created at: ${new Date(change.getCreationTimestamp()).toLocaleString()}`;
-			}).join('\n');
-			const message = `Changes in ${path.basename(filePath)}:\n${changeInfo}`;
-			vscode.window.showInformationMessage(message);
-
-			forceShowDecorations(editor.document, changes);
+		vscode.commands.registerCommand('tabd.toggleBlame', async () => {
+			const config = vscode.workspace.getConfiguration('tabd');
+			const currentValue = config.get<boolean>('showBlameByDefault', false);
+			
+			// Toggle the configuration value
+			await config.update('showBlameByDefault', !currentValue, vscode.ConfigurationTarget.Global);
 		}),
 	);
 	

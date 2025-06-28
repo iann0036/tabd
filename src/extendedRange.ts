@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 export enum ExtendedRangeType {
     Unknown = "UNKNOWN",
     UserEdit = "USER_EDIT",
-    AIModification = "AI_MODIFICATION",
+    AIGenerated = "AI_GENERATED",
     UndoRedo = "UNDO_REDO",
     Paste = "PASTE",
 }

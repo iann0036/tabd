@@ -16,8 +16,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "tabd.blame",
-        "title": "Tab'd: Blame"
+        "command": "tabd.toggleBlame",
+        "title": "Tab'd: Toggle Blame"
       }
     ],
     "configuration": {
