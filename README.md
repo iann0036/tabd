@@ -1,6 +1,4 @@
-<p align="center">
-  ![](assets/tabd_logo.png)
-</p>
+![](assets/tabd_logo.png)
 
 TODO:
 
