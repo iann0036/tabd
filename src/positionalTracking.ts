@@ -58,9 +58,10 @@ interface UpdateOptions {
 
 const getUpdatedRanges = (
    ranges: ExtendedRange[],
+   pasteRanges: ExtendedRange[],
    changes: readonly vscode.TextDocumentContentChangeEvent[],
    options: UpdateOptions,
-   reason: (vscode.TextDocumentChangeReason | undefined),
+   reason: (vscode.TextDocumentChangeReason | ExtendedRangeType.Paste | undefined),
    document: vscode.TextDocument
 ): ExtendedRange[] => {
    let toUpdateRanges: (ExtendedRange | null)[] = [...ranges];
@@ -88,7 +89,18 @@ const getUpdatedRanges = (
    for (const change of sortedChanges) {
       // Add new ranges
       let isAI = false;
-      if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
+
+      if (pasteRanges.length > 0) {
+         for (const pasteRange of pasteRanges) {
+            if (pasteRange.start.isEqual(change.range.start) && pasteRange.getCreationTimestamp() > Date.now() - 200) {
+               reason = ExtendedRangeType.Paste;
+            }
+         }
+      }
+
+      if (reason === ExtendedRangeType.Paste) {
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.Paste, Date.now()));
+      } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
          additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
       } else if (change.text.trim().length <= 1) {
          additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UserEdit, Date.now()));

@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 
 export enum ExtendedRangeType {
-    Unknown = 0,
-    UserEdit = 1,
-    AIModification = 2,
-    UndoRedo = 3,
+    Unknown = "UNKNOWN",
+    UserEdit = "USER_EDIT",
+    AIModification = "AI_MODIFICATION",
+    UndoRedo = "UNDO_REDO",
+    Paste = "PASTE",
 }
 
 export class ExtendedRange extends vscode.Range {
