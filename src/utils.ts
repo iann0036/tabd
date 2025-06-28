@@ -66,8 +66,8 @@ function getCurrentDateTimeReverse() {
 
 export function uniqueFileName(): string {
 	const dateTime = getCurrentDateTimeReverse();
-	const randomId = makeid(6);
-	const fileName = `${dateTime}-${randomId}.json`;
+	const randomId = makeid(8);
+	const fileName = `tabd-${randomId}.json`;
 	
 	return fileName;
 }

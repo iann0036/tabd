@@ -153,17 +153,20 @@ export function activate(context: vscode.ExtensionContext) {
 				const fileChangeRecordPath = path.join(workspaceFolder.uri.fsPath, '.tabd', 'log', relativePath, uniqueFileName());
 				if (!fs.existsSync(fileChangeRecordDir)) {
 					fs.mkdirSync(fileChangeRecordDir, { recursive: true });
-					
-					fs.writeFileSync(fileChangeRecordPath, JSON.stringify({
-						version: 1,
-						changes: fileState.changes.map(change => ({
-							start: change.start,
-							end: change.end,
-							type: change.getType(),
-							creationTimestamp: change.getCreationTimestamp(),
-						})),
-					}));
 				}
+				if (fs.existsSync(fileChangeRecordPath)) {
+					throw new Error(`File change record already exists at ${fileChangeRecordPath}. This should not happen!`);
+				}
+				
+				fs.writeFileSync(fileChangeRecordPath, JSON.stringify({
+					version: 1,
+					changes: fileState.changes.map(change => ({
+						start: change.start,
+						end: change.end,
+						type: change.getType(),
+						creationTimestamp: change.getCreationTimestamp(),
+					})),
+				}));
 
 				// Update the global file state
 				fileState.savePath = fileChangeRecordPath;
