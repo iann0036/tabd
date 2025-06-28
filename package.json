@@ -2,20 +2,43 @@
   "name": "tabd",
   "displayName": "Tab'd",
   "description": "Tracking for AI-assisted and copy-paste supported code editing",
+  "keywords": [
+    "tabd",
+    "ai",
+    "generative",
+    "copilot",
+    "github copilot",
+    "cursor",
+    "windsurf",
+    "tab completion",
+    "code completion",
+    "StackOverflow"
+  ],
+  "icon": "assets/tabd_logo.png",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.101.0"
   },
   "categories": [
-    "Other"
+    "AI",
+    "Machine Learning",
+    "Programming Languages"
   ],
   "activationEvents": [
     "*"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iann0036/tabd.git"
+    "url": "https://github.com/iann0036/tabd"
   },
+  "galleryBanner": {
+    "theme": "light"
+  },
+  "pricing": "Free",
+  "sponsor": {
+    "url": "https://github.com/sponsors/iann0036"
+  },
+  "homepage": "https://github.com/iann0036/tabd#readme",
   "publisher": "iann0036",
   "main": "./out/extension.js",
   "contributes": {
@@ -52,7 +75,7 @@
             "Store data in the repository",
             "Store data in your home directory"
           ],
-          "default": "repository",
+          "default": "homeDirectory",
           "description": "Choose where to store Tab'd data"
         }
       }
