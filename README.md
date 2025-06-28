@@ -1,4 +1,6 @@
-# Tab'd
+<p align="center">
+  <img src="https://github.com/iann0036/iann0036/blob/master/static/tabd_logo.png?raw=true" alt="Tab'd Logo" width="300px" />
+</p>
 
 Bring transparency to modern development with Tab'd - a VS Code extension that tracks and visualizes AI-assisted coding, copy-paste operations, and manual edits. Help your team understand code authorship and maintain accountability in an era of AI-powered development, while gaining insights into your own coding patterns.
 
