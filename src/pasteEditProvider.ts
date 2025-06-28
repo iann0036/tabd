@@ -18,20 +18,11 @@ export class PasteEditProvider implements vscode.DocumentPasteEditProvider {
         context: vscode.DocumentPasteEditContext,
         token: vscode.CancellationToken
     ): Promise<vscode.DocumentPasteEdit[] | undefined> {
-        console.log(
-            "provideDocumentPasteEdits",
-            document,
-            ranges,
-            dataTransfer,
-            context,
-            token
-        );
-
         if (ranges.length === 0 || !shouldProcessFile(document.uri)) {
             return;
         }
         await this.notifyPaste(document, ranges);
-
+        
         return;
     }
 }

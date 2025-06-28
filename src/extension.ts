@@ -49,6 +49,12 @@ var globalFileState: {
 } = {};
 
 export function activate(context: vscode.ExtensionContext) {
+	// Exclude the .tabd directory from the file explorer
+	const files = vscode.workspace.getConfiguration('files');
+	const exclude = files.get('exclude') as Record<string, boolean>;
+	exclude['**/.tabd'] = true;
+	files.update('exclude', exclude, vscode.ConfigurationTarget.Global);
+
 	vscode.workspace.onDidChangeTextDocument(e => {
 		if (e.document.uri.scheme !== 'file' || !shouldProcessFile(e.document.uri)) {
 			return;
