@@ -17,6 +17,18 @@ var globalFileState: {
 	},
 } = {};
 
+interface SerializedChange {
+	start: { line: number; character: number };
+	end: { line: number; character: number };
+	type: ExtendedRangeType;
+	creationTimestamp: number;
+}
+
+interface SerializedFileState {
+	version: number;
+	changes: SerializedChange[];
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	// Exclude the .tabd directory from the file explorer
 	const files = vscode.workspace.getConfiguration('files');
@@ -80,6 +92,8 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!editor || editor.document.uri.scheme !== 'file' || !shouldProcessFile(editor.document.uri)) {
 				return;
 			}
+
+			loadGlobalFileStateForDocumentFromDisk(editor.document);
 
 			const config = vscode.workspace.getConfiguration('tabd');
 			const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
@@ -214,6 +228,88 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 	
 	context.subscriptions.push(providerRegistrations);
+
+	if (vscode.window.activeTextEditor) {
+		loadGlobalFileStateForDocumentFromDisk(vscode.window.activeTextEditor.document);
+		const config = vscode.workspace.getConfiguration('tabd');
+		const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
+		
+		if (showBlameByDefault) {
+			const filePath = fsPath(vscode.window.activeTextEditor.document.uri);
+			const fileState = globalFileState[filePath];
+			if (fileState && fileState.changes.length > 0) {
+				triggerDecorationUpdate(vscode.window.activeTextEditor.document, fileState.changes);
+			}
+		}
+	}
 }
 
 export function deactivate() {}
+
+function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | undefined) {
+	if (!document) {
+		return;
+	}
+
+	if (document.uri.scheme !== 'file' || !shouldProcessFile(document.uri)) {
+		return;
+	}
+
+	const filePath = fsPath(document.uri);
+	if (globalFileState[filePath]) {
+		return; // Already loaded
+	}
+
+	globalFileState[filePath] = { changes: [], pasteRanges: [] };
+
+	// Check is Git is initialized at the workspace root
+	const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+	if (!workspaceFolder) {
+		return;
+	}
+
+	const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
+	const isGitRepo = fs.existsSync(gitPath);
+	
+	if (!isGitRepo) {
+		return;
+	}
+
+	const relativePath = vscode.workspace.asRelativePath(document.uri, false);
+	const fileChangeRecordDir = path.join(workspaceFolder.uri.fsPath, '.tabd', 'log', relativePath);
+
+	if (!fs.existsSync(fileChangeRecordDir)) {
+		return; // No file state found
+	}
+
+	const fileChangeRecords = fs.readdirSync(fileChangeRecordDir)
+		.filter(file => file.endsWith('.json'))
+		.map(file => path.join(fileChangeRecordDir, file));
+	
+	if (fileChangeRecords.length === 0) {
+		return; // No file state found
+	}
+
+	for (const fileChangeRecordPath of fileChangeRecords) {
+		try {
+			const fileState = JSON.parse(fs.readFileSync(fileChangeRecordPath, 'utf8'));
+			if (fileState.version !== 1) {
+				continue; // Unsupported version
+			}
+
+			const fileStateTyped: SerializedFileState = fileState;
+			const changes: ExtendedRange[] = fileStateTyped.changes.map((change: SerializedChange) => new ExtendedRange(
+				new vscode.Position(change.start.line, change.start.character),
+				new vscode.Position(change.end.line, change.end.character),
+				change.type,
+				change.creationTimestamp
+			));
+
+			// TODO: Add a whole file hash to ensure the file state is valid
+
+			globalFileState[filePath].changes.push(...changes);
+		} catch (error) {
+			console.warn(`Failed to load file state from ${fileChangeRecordPath}:`, error);
+		}
+	}
+}
