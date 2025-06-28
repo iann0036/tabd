@@ -256,62 +256,182 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: ExtendedRange[]): ExtendedRange[] {
-	// Combine all ranges and sort by position (line first, then character)
-	const allRanges = [...existingRanges, ...newRanges];
-	allRanges.sort((a, b) => {
+	// Start with existing ranges
+	let mergedRanges: ExtendedRange[] = [...existingRanges];
+	
+	// Process each new range
+	for (const newRange of newRanges) {
+		const rangesToProcess: ExtendedRange[] = [];
+		const indicesToRemove: number[] = [];
+		
+		// Find all ranges that overlap with the new range
+		for (let i = 0; i < mergedRanges.length; i++) {
+			const existingRange = mergedRanges[i];
+			
+			// Check if ranges overlap
+			if (existingRange.start.isBefore(newRange.end) && newRange.start.isBefore(existingRange.end)) {
+				rangesToProcess.push(existingRange);
+				indicesToRemove.push(i);
+			}
+		}
+		
+		// Remove overlapping ranges (in reverse order to maintain indices)
+		for (let i = indicesToRemove.length - 1; i >= 0; i--) {
+			mergedRanges.splice(indicesToRemove[i], 1);
+		}
+		
+		if (rangesToProcess.length === 0) {
+			// No overlap, just add the new range
+			mergedRanges.push(newRange);
+		} else {
+			// Handle overlaps based on timestamps
+			for (const existingRange of rangesToProcess) {
+				if (newRange.getCreationTimestamp() > existingRange.getCreationTimestamp()) {
+					// New range is newer, so it takes precedence
+					// Check if we need to split the existing range
+					
+					// If new range is completely contained within existing range, split the existing range
+					if (existingRange.start.isBefore(newRange.start) && newRange.end.isBefore(existingRange.end)) {
+						// Split into two parts: before and after the new range
+						const beforeRange = new ExtendedRange(
+							existingRange.start,
+							newRange.start,
+							existingRange.getType(),
+							existingRange.getCreationTimestamp(),
+							existingRange.getAuthor()
+						);
+						const afterRange = new ExtendedRange(
+							newRange.end,
+							existingRange.end,
+							existingRange.getType(),
+							existingRange.getCreationTimestamp(),
+							existingRange.getAuthor()
+						);
+						
+						// Only add non-empty ranges
+						if (!beforeRange.start.isEqual(beforeRange.end)) {
+							mergedRanges.push(beforeRange);
+						}
+						if (!afterRange.start.isEqual(afterRange.end)) {
+							mergedRanges.push(afterRange);
+						}
+					}
+					// If existing range partially overlaps with new range, keep the non-overlapping parts
+					else {
+						// Keep the part before the new range starts
+						if (existingRange.start.isBefore(newRange.start)) {
+							const beforeRange = new ExtendedRange(
+								existingRange.start,
+								newRange.start,
+								existingRange.getType(),
+								existingRange.getCreationTimestamp(),
+								existingRange.getAuthor()
+							);
+							if (!beforeRange.start.isEqual(beforeRange.end)) {
+								mergedRanges.push(beforeRange);
+							}
+						}
+						
+						// Keep the part after the new range ends
+						if (newRange.end.isBefore(existingRange.end)) {
+							const afterRange = new ExtendedRange(
+								newRange.end,
+								existingRange.end,
+								existingRange.getType(),
+								existingRange.getCreationTimestamp(),
+								existingRange.getAuthor()
+							);
+							if (!afterRange.start.isEqual(afterRange.end)) {
+								mergedRanges.push(afterRange);
+							}
+						}
+					}
+				} else {
+					// Existing range is newer, so it takes precedence
+					// Check if we need to split the new range
+					
+					// If existing range is completely contained within new range, split the new range
+					if (newRange.start.isBefore(existingRange.start) && existingRange.end.isBefore(newRange.end)) {
+						// Split into two parts: before and after the existing range
+						const beforeRange = new ExtendedRange(
+							newRange.start,
+							existingRange.start,
+							newRange.getType(),
+							newRange.getCreationTimestamp(),
+							newRange.getAuthor()
+						);
+						const afterRange = new ExtendedRange(
+							existingRange.end,
+							newRange.end,
+							newRange.getType(),
+							newRange.getCreationTimestamp(),
+							newRange.getAuthor()
+						);
+						
+						// Only add non-empty ranges
+						if (!beforeRange.start.isEqual(beforeRange.end)) {
+							mergedRanges.push(beforeRange);
+						}
+						if (!afterRange.start.isEqual(afterRange.end)) {
+							mergedRanges.push(afterRange);
+						}
+						
+						// Keep the existing range
+						mergedRanges.push(existingRange);
+					}
+					// If new range partially overlaps with existing range, keep the non-overlapping parts
+					else {
+						// Keep the part of new range before the existing range starts
+						if (newRange.start.isBefore(existingRange.start)) {
+							const beforeRange = new ExtendedRange(
+								newRange.start,
+								existingRange.start,
+								newRange.getType(),
+								newRange.getCreationTimestamp(),
+								newRange.getAuthor()
+							);
+							if (!beforeRange.start.isEqual(beforeRange.end)) {
+								mergedRanges.push(beforeRange);
+							}
+						}
+						
+						// Keep the part of new range after the existing range ends
+						if (existingRange.end.isBefore(newRange.end)) {
+							const afterRange = new ExtendedRange(
+								existingRange.end,
+								newRange.end,
+								newRange.getType(),
+								newRange.getCreationTimestamp(),
+								newRange.getAuthor()
+							);
+							if (!afterRange.start.isEqual(afterRange.end)) {
+								mergedRanges.push(afterRange);
+							}
+						}
+						
+						// Keep the existing range
+						mergedRanges.push(existingRange);
+					}
+				}
+			}
+			
+			// If no existing ranges took precedence, add the new range
+			const hasNewerExisting = rangesToProcess.some(existing => 
+				existing.getCreationTimestamp() > newRange.getCreationTimestamp()
+			);
+			if (!hasNewerExisting) {
+				mergedRanges.push(newRange);
+			}
+		}
+	}
+	
+	// Sort the final ranges by position
+	mergedRanges.sort((a, b) => {
 		if (a.start.line !== b.start.line) {
 			return a.start.line - b.start.line;
 		}
 		return a.start.character - b.start.character;
 	});
-
-	const mergedRanges: ExtendedRange[] = [];
-	
-	for (const currentRange of allRanges) {
-		// Find overlapping ranges in the merged array
-		const overlappingIndices: number[] = [];
-		
-		for (let i = 0; i < mergedRanges.length; i++) {
-			const existingRange = mergedRanges[i];
-			
-			// Check if ranges overlap
-			if (existingRange.start.isBefore(currentRange.end) && currentRange.start.isBefore(existingRange.end)) {
-				overlappingIndices.push(i);
-			}
-		}
-		
-		if (overlappingIndices.length === 0) {
-			// No overlap, just add the range
-			mergedRanges.push(currentRange);
-		} else {
-			// There are overlapping ranges - determine which one to keep
-			// Keep the range with the latest creation timestamp
-			let rangeToKeep = currentRange;
-			const overlappingRanges = overlappingIndices.map(i => mergedRanges[i]);
-			
-			for (const existingRange of overlappingRanges) {
-				if (existingRange.getCreationTimestamp() > rangeToKeep.getCreationTimestamp()) {
-					rangeToKeep = existingRange;
-				}
-			}
-			
-			// Remove all overlapping ranges from the merged array (in reverse order to maintain indices)
-			for (let i = overlappingIndices.length - 1; i >= 0; i--) {
-				mergedRanges.splice(overlappingIndices[i], 1);
-			}
-			
-			// Add the range to keep
-			mergedRanges.push(rangeToKeep);
-			
-			// Re-sort the merged ranges to maintain order
-			mergedRanges.sort((a, b) => {
-				if (a.start.line !== b.start.line) {
-					return a.start.line - b.start.line;
-				}
-				return a.start.character - b.start.character;
-			});
-		}
-	}
 	
 	return mergedRanges;
 }
