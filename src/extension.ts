@@ -284,6 +284,10 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 			// No overlap, just add the new range
 			mergedRanges.push(newRange);
 		} else {
+			// Collect all resulting ranges from processing overlaps
+			const resultingRanges: ExtendedRange[] = [];
+			let shouldAddNewRange = true;
+			
 			// Handle overlaps based on timestamps
 			for (const existingRange of rangesToProcess) {
 				if (newRange.getCreationTimestamp() > existingRange.getCreationTimestamp()) {
@@ -310,10 +314,10 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 						
 						// Only add non-empty ranges
 						if (!beforeRange.start.isEqual(beforeRange.end)) {
-							mergedRanges.push(beforeRange);
+							resultingRanges.push(beforeRange);
 						}
 						if (!afterRange.start.isEqual(afterRange.end)) {
-							mergedRanges.push(afterRange);
+							resultingRanges.push(afterRange);
 						}
 					}
 					// If existing range partially overlaps with new range, keep the non-overlapping parts
@@ -328,7 +332,7 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 								existingRange.getAuthor()
 							);
 							if (!beforeRange.start.isEqual(beforeRange.end)) {
-								mergedRanges.push(beforeRange);
+								resultingRanges.push(beforeRange);
 							}
 						}
 						
@@ -342,13 +346,13 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 								existingRange.getAuthor()
 							);
 							if (!afterRange.start.isEqual(afterRange.end)) {
-								mergedRanges.push(afterRange);
+								resultingRanges.push(afterRange);
 							}
 						}
 					}
 				} else {
 					// Existing range is newer, so it takes precedence
-					// Check if we need to split the new range
+					shouldAddNewRange = false;
 					
 					// If existing range is completely contained within new range, split the new range
 					if (newRange.start.isBefore(existingRange.start) && existingRange.end.isBefore(newRange.end)) {
@@ -370,14 +374,11 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 						
 						// Only add non-empty ranges
 						if (!beforeRange.start.isEqual(beforeRange.end)) {
-							mergedRanges.push(beforeRange);
+							resultingRanges.push(beforeRange);
 						}
 						if (!afterRange.start.isEqual(afterRange.end)) {
-							mergedRanges.push(afterRange);
+							resultingRanges.push(afterRange);
 						}
-						
-						// Keep the existing range
-						mergedRanges.push(existingRange);
 					}
 					// If new range partially overlaps with existing range, keep the non-overlapping parts
 					else {
@@ -391,7 +392,7 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 								newRange.getAuthor()
 							);
 							if (!beforeRange.start.isEqual(beforeRange.end)) {
-								mergedRanges.push(beforeRange);
+								resultingRanges.push(beforeRange);
 							}
 						}
 						
@@ -405,35 +406,57 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 								newRange.getAuthor()
 							);
 							if (!afterRange.start.isEqual(afterRange.end)) {
-								mergedRanges.push(afterRange);
+								resultingRanges.push(afterRange);
 							}
 						}
-						
-						// Keep the existing range
-						mergedRanges.push(existingRange);
 					}
+					
+					// Always keep the existing range since it's newer
+					resultingRanges.push(existingRange);
 				}
 			}
 			
-			// If no existing ranges took precedence, add the new range
-			const hasNewerExisting = rangesToProcess.some(existing => 
-				existing.getCreationTimestamp() > newRange.getCreationTimestamp()
-			);
-			if (!hasNewerExisting) {
+			// Add all resulting ranges to merged ranges
+			mergedRanges.push(...resultingRanges);
+			
+			// Add the new range if it wasn't superseded by any existing range
+			if (shouldAddNewRange) {
 				mergedRanges.push(newRange);
 			}
 		}
 	}
 	
-	// Sort the final ranges by position
-	mergedRanges.sort((a, b) => {
+	// Remove duplicates and sort the final ranges by position
+	const uniqueRanges = deduplicateRanges(mergedRanges);
+	uniqueRanges.sort((a, b) => {
 		if (a.start.line !== b.start.line) {
 			return a.start.line - b.start.line;
 		}
 		return a.start.character - b.start.character;
 	});
 	
-	return mergedRanges;
+	return uniqueRanges;
+}
+
+function deduplicateRanges(ranges: ExtendedRange[]): ExtendedRange[] {
+	const uniqueRanges: ExtendedRange[] = [];
+	
+	for (const range of ranges) {
+		// Check if an identical range already exists
+		const isDuplicate = uniqueRanges.some(existing => 
+			existing.start.isEqual(range.start) &&
+			existing.end.isEqual(range.end) &&
+			existing.getType() === range.getType() &&
+			existing.getCreationTimestamp() === range.getCreationTimestamp() &&
+			existing.getAuthor() === range.getAuthor()
+		);
+		
+		if (!isDuplicate) {
+			uniqueRanges.push(range);
+		}
+	}
+	
+	return uniqueRanges;
 }
 
 export function deactivate() {}
