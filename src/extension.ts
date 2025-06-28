@@ -187,6 +187,7 @@ export function activate(context: vscode.ExtensionContext) {
 						throw new Error(`File change record already exists at ${fileChangeRecordPath}. This should not happen!`);
 					}
 					
+					// TODO: Add a whole file hash to ensure the file state is valid
 					fs.writeFileSync(fileChangeRecordPath, JSON.stringify({
 						version: 1,
 						changes: fileState.changes.map(change => ({
@@ -244,6 +245,67 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 }
 
+function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: ExtendedRange[]): ExtendedRange[] {
+	// Combine all ranges and sort by position (line first, then character)
+	const allRanges = [...existingRanges, ...newRanges];
+	allRanges.sort((a, b) => {
+		if (a.start.line !== b.start.line) {
+			return a.start.line - b.start.line;
+		}
+		return a.start.character - b.start.character;
+	});
+
+	const mergedRanges: ExtendedRange[] = [];
+	
+	for (const currentRange of allRanges) {
+		// Find overlapping ranges in the merged array
+		const overlappingIndices: number[] = [];
+		
+		for (let i = 0; i < mergedRanges.length; i++) {
+			const existingRange = mergedRanges[i];
+			
+			// Check if ranges overlap
+			if (existingRange.start.isBefore(currentRange.end) && currentRange.start.isBefore(existingRange.end)) {
+				overlappingIndices.push(i);
+			}
+		}
+		
+		if (overlappingIndices.length === 0) {
+			// No overlap, just add the range
+			mergedRanges.push(currentRange);
+		} else {
+			// There are overlapping ranges - determine which one to keep
+			// Keep the range with the latest creation timestamp
+			let rangeToKeep = currentRange;
+			const overlappingRanges = overlappingIndices.map(i => mergedRanges[i]);
+			
+			for (const existingRange of overlappingRanges) {
+				if (existingRange.getCreationTimestamp() > rangeToKeep.getCreationTimestamp()) {
+					rangeToKeep = existingRange;
+				}
+			}
+			
+			// Remove all overlapping ranges from the merged array (in reverse order to maintain indices)
+			for (let i = overlappingIndices.length - 1; i >= 0; i--) {
+				mergedRanges.splice(overlappingIndices[i], 1);
+			}
+			
+			// Add the range to keep
+			mergedRanges.push(rangeToKeep);
+			
+			// Re-sort the merged ranges to maintain order
+			mergedRanges.sort((a, b) => {
+				if (a.start.line !== b.start.line) {
+					return a.start.line - b.start.line;
+				}
+				return a.start.character - b.start.character;
+			});
+		}
+	}
+	
+	return mergedRanges;
+}
+
 export function deactivate() {}
 
 function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | undefined) {
@@ -290,26 +352,32 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 		return; // No file state found
 	}
 
+	let updatedRanges: ExtendedRange[] = [];
+
+	// Sort file change records by filename (which includes timestamp) to process chronologically
+	fileChangeRecords.sort();
+
 	for (const fileChangeRecordPath of fileChangeRecords) {
 		try {
-			const fileState = JSON.parse(fs.readFileSync(fileChangeRecordPath, 'utf8'));
+			const fileState: SerializedFileState = JSON.parse(fs.readFileSync(fileChangeRecordPath, 'utf8'));
 			if (fileState.version !== 1) {
 				continue; // Unsupported version
 			}
-
-			const fileStateTyped: SerializedFileState = fileState;
-			const changes: ExtendedRange[] = fileStateTyped.changes.map((change: SerializedChange) => new ExtendedRange(
-				new vscode.Position(change.start.line, change.start.character),
-				new vscode.Position(change.end.line, change.end.character),
-				change.type,
-				change.creationTimestamp
-			));
-
-			// TODO: Add a whole file hash to ensure the file state is valid
-
-			globalFileState[filePath].changes.push(...changes);
+			
+			const newChanges = fileState.changes.map(change => 
+				new ExtendedRange(
+					new vscode.Position(change.start.line, change.start.character),
+					new vscode.Position(change.end.line, change.end.character),
+					change.type,
+					change.creationTimestamp
+				)
+			);
+			
+			updatedRanges = mergeRangesSequentially(updatedRanges, newChanges);
 		} catch (error) {
 			console.warn(`Failed to load file state from ${fileChangeRecordPath}:`, error);
 		}
 	}
+
+	globalFileState[filePath].changes = updatedRanges;
 }
