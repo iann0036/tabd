@@ -59,7 +59,7 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
             editor.setDecorations(userEditDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UserEdit).map(range => {
                 return {
                     range: range,
-                    hoverMessage: `Edit by ${range.getAuthor() || 'You'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
+                    hoverMessage: `Edit by ${range.getAuthor() || 'you'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
                 };
             }));
             editor.setDecorations(aiGeneratedDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.AIGenerated).map(range => {
@@ -71,19 +71,19 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
             editor.setDecorations(undoRedoDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UndoRedo).map(range => {
                 return {
                     range: range,
-                    hoverMessage: `Undo/Redo by ${range.getAuthor() || 'You'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
+                    hoverMessage: `Undo/Redo by ${range.getAuthor() || 'you'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
                 };
             }));
             editor.setDecorations(pasteDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Paste).map(range => {
                 return {
                     range: range,
-                    hoverMessage: `Clipboard Paste by ${range.getAuthor() || 'You'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
+                    hoverMessage: `Clipboard Paste by ${range.getAuthor() || 'you'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
                 };
             }));
             editor.setDecorations(unknownDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Unknown).map(range => {
                 return {
                     range: range,
-                    hoverMessage: `Unknown Action by ${range.getAuthor() || 'You'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`
+                    hoverMessage: `Unknown Action by ${range.getAuthor() || 'you'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`
                 };
             }));
         }
