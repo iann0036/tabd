@@ -12,6 +12,11 @@
   "activationEvents": [
     "*"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iann0036/tabd.git"
+  },
+  "publisher": "iann0036",
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -33,7 +38,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && cp -rf ./assets/ out/assets/",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
