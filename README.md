@@ -22,18 +22,9 @@ Tab'd provides intelligent tracking and visualization of different types of code
 
 Tab'd uses color-coded background highlights to show different edit types:
 
-<div style="background-color:#00ffff33;">
-<b>Cyan</b>
-</div> - AI-generated code
+![](https://github.com/iann0036/iann0036/blob/master/static/tabd_screenshot.png?raw=true)
 
-<span style="background-color:#00ffff33;">
-<b>Cyan</b>
-</span> - AI-generated code
-
-- <span style="background-color: #00ffff33; padding: 2px 4px;">**Cyan**</span> - AI-generated code
-- <span style="background-color: #ff880033; padding: 2px 4px;">**Orange**</span> - Pasted code
-- <span style="background-color: #80008033; padding: 2px 4px;">**Purple**</span> - Undo/redo operations
-- <span style="background-color: #88888811; padding: 2px 4px;">**Gray**</span> - Regular user edits
+Hovering over a highlight gives further information about the type of change, who performed the change, and when it was performed.
 
 ## Installation
 
