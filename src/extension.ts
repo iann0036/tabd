@@ -7,7 +7,7 @@ import { Mutex } from 'async-mutex';
 import { fsPath, uniqueFileName, shouldProcessFile } from './utils';
 import { ExtendedRange, ExtendedRangeType, mergeRangesSequentially } from './extendedRange';
 import { PasteEditProvider } from './pasteEditProvider';
-import { triggerDecorationUpdate, forceShowDecorations } from './decorators';
+import { triggerDecorationUpdate } from './decorators';
 
 var editLock = new Mutex();
 var globalFileState: {
