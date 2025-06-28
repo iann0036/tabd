@@ -459,7 +459,7 @@ function getStorageDirectory(workspaceFolder: vscode.WorkspaceFolder, document: 
 			.replace(/_+/g, '_')
 			.replace(/^_|_$/g, '');
 		
-		return path.join(os.homedir(), '.tabd', 'multilog', sanitizedPath);
+		return path.join(os.homedir(), '.tabd', 'workspaces', sanitizedPath);
 	} else if (storageType === 'repository') {
 		return path.join(workspaceFolder.uri.fsPath, '.tabd');
 	} else {
