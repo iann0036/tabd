@@ -36,11 +36,16 @@ interface SerializedFileState {
 let currentUser: string = "";
 
 export function activate(context: vscode.ExtensionContext) {
-	// Always exclude the .tabd directory from the file explorer
-	const files = vscode.workspace.getConfiguration('files');
-	const exclude = files.get('exclude') as Record<string, boolean>;
-	exclude['**/.tabd'] = true;
-	files.update('exclude', exclude, vscode.ConfigurationTarget.Global);
+	// Only exclude the .tabd directory from the file explorer when using repository storage
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
+	
+	if (storageType === 'repository') {
+		const files = vscode.workspace.getConfiguration('files');
+		const exclude = files.get('exclude') as Record<string, boolean>;
+		exclude['**/.tabd'] = true;
+		files.update('exclude', exclude, vscode.ConfigurationTarget.Global);
+	}
 
 	const notifyPaste = function (d: vscode.TextDocument, ranges: readonly vscode.Range[]) {
 		return editLock.runExclusive(async () => {
@@ -152,10 +157,20 @@ export function activate(context: vscode.ExtensionContext) {
 				// Clear global file state when storage type changes to force reload from new location
 				globalFileState = {};
 				
+				// Update files.exclude based on storage type
+				const config = vscode.workspace.getConfiguration('tabd');
+				const storageType = config.get<string>('storage', 'repository');
+				
+				if (storageType === 'repository') {
+					const files = vscode.workspace.getConfiguration('files');
+					const exclude = files.get('exclude') as Record<string, boolean>;
+					exclude['**/.tabd'] = true;
+					files.update('exclude', exclude, vscode.ConfigurationTarget.Global);
+				}
+				
 				// Reload file state for active editor
 				if (vscode.window.activeTextEditor) {
 					loadGlobalFileStateForDocumentFromDisk(vscode.window.activeTextEditor.document);
-					const config = vscode.workspace.getConfiguration('tabd');
 					const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
 					
 					if (showBlameByDefault) {
