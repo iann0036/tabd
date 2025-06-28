@@ -50,8 +50,6 @@ export function activate(context: vscode.ExtensionContext) {
 		return editLock.runExclusive(async () => {
 			let fileState = globalFileState[fsPath(e.document.uri)];
 			let updatedRanges: ExtendedRange[];
-			let pendingRanges: ExtendedRange[] = [];
-			let preservationRanges: vscode.Range[] = [];
 
 			if (!fileState) {
 				fileState = globalFileState[fsPath(e.document.uri)] = { changes: [] };
@@ -74,10 +72,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 			for (const editor of vscode.window.visibleTextEditors) {
 				if (editor.document === e.document) {
-					editor.setDecorations(userEditDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UserEdit).map(range => new vscode.Range(range.start, range.end)));
-					editor.setDecorations(aiModificationDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.AIModification).map(range => new vscode.Range(range.start, range.end)));
-					editor.setDecorations(undoRedoDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UndoRedo).map(range => new vscode.Range(range.start, range.end)));
-					editor.setDecorations(unknownDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Unknown).map(range => new vscode.Range(range.start, range.end)));
+					editor.setDecorations(userEditDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UserEdit));
+					editor.setDecorations(aiModificationDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.AIModification));
+					editor.setDecorations(undoRedoDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UndoRedo));
+					editor.setDecorations(unknownDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Unknown));
 				}
 			}
         });
