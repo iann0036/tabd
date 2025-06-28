@@ -1,7 +1,7 @@
 {
   "name": "tabd",
-  "displayName": "My Extension",
-  "description": "A VS Code extension",
+  "displayName": "Tab'd",
+  "description": "Tracking for AI-assisted and copy-paste supported code editing",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.101.0"
@@ -16,10 +16,20 @@
   "contributes": {
     "commands": [
       {
-        "command": "tabd.helloWorld",
-        "title": "Hello World"
+        "command": "tabd.blame",
+        "title": "Tab'd: Blame"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Tab'd",
+      "properties": {
+        "tabd.showBlameByDefault": {
+          "type": "boolean",
+          "default": false,
+          "description": "Always show blame in the editor"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
