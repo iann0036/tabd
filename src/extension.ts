@@ -5,7 +5,7 @@ import { execSync } from 'child_process';
 import { getUpdatedRanges } from "./positionalTracking";
 import { Mutex } from 'async-mutex';
 import { fsPath, uniqueFileName, shouldProcessFile } from './utils';
-import { ExtendedRange, ExtendedRangeType } from './extendedRange';
+import { ExtendedRange, ExtendedRangeType, deduplicateRanges } from './extendedRange';
 import { PasteEditProvider } from './pasteEditProvider';
 import { triggerDecorationUpdate, forceShowDecorations } from './decorators';
 
@@ -434,27 +434,6 @@ function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: Ext
 		}
 		return a.start.character - b.start.character;
 	});
-	
-	return uniqueRanges;
-}
-
-function deduplicateRanges(ranges: ExtendedRange[]): ExtendedRange[] {
-	const uniqueRanges: ExtendedRange[] = [];
-	
-	for (const range of ranges) {
-		// Check if an identical range already exists
-		const isDuplicate = uniqueRanges.some(existing => 
-			existing.start.isEqual(range.start) &&
-			existing.end.isEqual(range.end) &&
-			existing.getType() === range.getType() &&
-			existing.getCreationTimestamp() === range.getCreationTimestamp() &&
-			existing.getAuthor() === range.getAuthor()
-		);
-		
-		if (!isDuplicate) {
-			uniqueRanges.push(range);
-		}
-	}
 	
 	return uniqueRanges;
 }

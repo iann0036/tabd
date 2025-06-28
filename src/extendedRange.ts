@@ -38,3 +38,24 @@ export class ExtendedRange extends vscode.Range {
         return this.author;
     }
 }
+
+export function deduplicateRanges(ranges: ExtendedRange[]): ExtendedRange[] {
+    const uniqueRanges: ExtendedRange[] = [];
+    
+    for (const range of ranges) {
+        // Check if an identical range already exists
+        const isDuplicate = uniqueRanges.some(existing => 
+            existing.start.isEqual(range.start) &&
+            existing.end.isEqual(range.end) &&
+            existing.getType() === range.getType() &&
+            existing.getCreationTimestamp() === range.getCreationTimestamp() &&
+            existing.getAuthor() === range.getAuthor()
+        );
+        
+        if (!isDuplicate) {
+            uniqueRanges.push(range);
+        }
+    }
+    
+    return uniqueRanges;
+}
