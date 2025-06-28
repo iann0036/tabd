@@ -151,7 +151,22 @@ const getUpdatedRanges = (
    }
 
    for (const change of sortedChanges) {
+      // Add new ranges
+      let isAI = false;
+      if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
+      } else if (change.text.trim().length <= 1) {
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UserEdit, Date.now()));
+      } else {
+         if (!change.range.start.isEqual(change.range.end)) { // TODO: and if the delta text matches
+            isAI = true;
+         }
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIModification, Date.now()));
+      }
+      //
+
       for (let i = 0; i < toUpdateRanges.length; i++) {
+         // ** onDeletion **
          const currentRange = toUpdateRanges[i];
          if (!currentRange) {
             continue;
@@ -163,7 +178,11 @@ const getUpdatedRanges = (
             !change.range.start.isEqual(currentRange.end)
          ) {
             if (!change.range.start.isEqual(change.range.end)) {
-               if (onDeletion === 'remove') {
+               if (isAI) {
+                  console.log("** isAI addition");
+                  additionalRanges.push(new ExtendedRange(change.range.start, change.range.end, ExtendedRangeType.Unknown, Date.now()));
+                  toUpdateRanges[i] = null;
+               } else if (onDeletion === 'remove') {
                   toUpdateRanges[i] = null;
                } else if (onDeletion === 'shrink') {
                   let newRangeStart = currentRange.start;
@@ -176,7 +195,8 @@ const getUpdatedRanges = (
                   if (change.range.contains(currentRange.end)) {
                      newRangeEnd = change.range.start;
                   }
-
+               
+                  console.log("** NOT isAI addition");
                   if (newRangeEnd.isBefore(newRangeStart)) {
                      toUpdateRanges[i] = null;
                   } else {
@@ -186,6 +206,7 @@ const getUpdatedRanges = (
             }
          }
 
+         // ** onAddition **
          const updatedRange = toUpdateRanges[i];
          if (!updatedRange) {
             continue;
@@ -214,6 +235,7 @@ const getUpdatedRanges = (
          if (!finalRange) {
             continue;
          }
+         //
 
          const updatedRangeStart = getUpdatedPosition(finalRange.start, change);
          let updatedRangeEnd: vscode.Position;
@@ -229,30 +251,15 @@ const getUpdatedRanges = (
 
          toUpdateRanges[i] = new ExtendedRange(updatedRangeStart, updatedRangeEnd, finalRange.getType(), finalRange.getCreationTimestamp());
       }
-
-      // Add new ranges
-      if (!change.range.start.isEqual(change.range.end)) {
-         // Preserve start to end range for overrides
-         additionalRanges.push(new ExtendedRange(change.range.start, change.range.end, ExtendedRangeType.Unknown, Date.now()));
-      }
-
-      if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
-         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
-         continue;
-      }
-
-      if (change.text.trim().length <= 1) {
-         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UserEdit, Date.now()));
-         continue;
-      }
-
-      additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIModification, Date.now()));
-      //
    }
 
-   // Add additional ranges to the toUpdateRanges (possibly prepend?)
+   // Add additional ranges to the toUpdateRanges
+   // TODO: does this need to be sorted?
    if (additionalRanges.length > 0) {
-      toUpdateRanges = toUpdateRanges.concat(additionalRanges);
+      let toUpdateRangesUnordered = toUpdateRanges.filter((range): range is ExtendedRange => range !== null).concat(additionalRanges);
+      toUpdateRanges = [...toUpdateRangesUnordered].sort((change1, change2) =>
+         change2.start.compareTo(change1.start)
+      );
    }
 
    for (let i = 0; i < toUpdateRanges.length - 1; i++) {
