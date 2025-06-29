@@ -598,6 +598,16 @@ function saveToGitNotes(workspaceFolder: vscode.WorkspaceFolder, document: vscod
 			timeout: 10000,
 		});
 		
+		// Push the notes to origin
+		try {
+			execSync(`git push origin refs/notes/${namespace}`, {
+				cwd: workspaceFolder.uri.fsPath,
+				timeout: 15000,
+			});
+		} catch (pushError) {
+			console.warn(`Failed to push Git notes to origin for namespace ${namespace}:`, pushError);
+		}
+		
 		// Clean up temporary file
 		fs.unlinkSync(tempFilePath);
 	} catch (error) {
@@ -615,6 +625,16 @@ function saveToGitNotes(workspaceFolder: vscode.WorkspaceFolder, document: vscod
  */
 function loadFromGitNotes(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument, namespace: string): SerializedFileState[] {
 	try {
+		// Pull notes from origin first
+		try {
+			execSync(`git fetch origin refs/notes/${namespace}:refs/notes/${namespace}`, {
+				cwd: workspaceFolder.uri.fsPath,
+				timeout: 15000,
+			});
+		} catch (pullError) {
+			console.warn(`Failed to pull Git notes from origin for namespace ${namespace}:`, pullError);
+		}
+		
 		// List all notes for this namespace
 		const notesOutput = execSync(`git notes --ref=${namespace} list`, {
 			cwd: workspaceFolder.uri.fsPath,
