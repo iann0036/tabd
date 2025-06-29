@@ -217,24 +217,49 @@ export function activate(context: vscode.ExtensionContext) {
 					const config = vscode.workspace.getConfiguration('tabd');
 					const storageType = config.get<string>('storage', 'repository');
 
-					if (currentUser === "" && storageType === 'repository') {
+					if (currentUser === "" && (storageType === 'repository' || storageType === 'experimental')) {
 						currentUser = getCurrentGitUser(workspaceFolder);
 					}
 
-					// Write to existing file if it exists
+					// Prepare the data to save
+					const dataToSave: SerializedFileState = {
+						version: 1,
+						changes: fileState.changes
+							.filter(change => change.getCreationTimestamp() > (fileState.loadTimestamp || 0))
+							.map(change => ({
+								start: change.start,
+								end: change.end,
+								type: change.getType(),
+								creationTimestamp: change.getCreationTimestamp(),
+								author: change.getAuthor() || currentUser || ((storageType === 'repository' || storageType === 'experimental') ? 'an unknown user' : ''),
+							})),
+					};
+
+					// Handle gitnotes storage
+					if (storageType === 'experimental') {
+						// Check if Git is initialized at the workspace root
+						const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
+						const isGitRepo = fs.existsSync(gitPath);
+						
+						if (!isGitRepo) {
+							console.warn('No Git repository found. Skipping file state save.');
+							return;
+						}
+
+						try {
+							const namespace = getGitNotesNamespace(workspaceFolder, e);
+							saveToGitNotes(workspaceFolder, e, dataToSave, namespace);
+							
+							globalFileState[fsPath(e.uri)] = fileState;
+						} catch (error) {
+							console.error('Failed to save to Git notes:', error);
+						}
+						return;
+					}
+
+					// Write to existing file if it exists (traditional storage)
 					if (fileState.savePath) {
-						fs.writeFileSync(fileState.savePath, JSON.stringify({
-							version: 1,
-							changes: fileState.changes
-								.filter(change => change.getCreationTimestamp() > (fileState.loadTimestamp || 0))
-								.map(change => ({
-									start: change.start,
-									end: change.end,
-									type: change.getType(),
-									creationTimestamp: change.getCreationTimestamp(),
-									author: change.getAuthor() || currentUser || (storageType === 'repository' ? 'an unknown user' : ''),
-								})),
-						}));
+						fs.writeFileSync(fileState.savePath, JSON.stringify(dataToSave));
 						return;
 					}
 
@@ -267,18 +292,7 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 					
 					// TODO: Add a whole file hash to ensure the file state is valid
-					fs.writeFileSync(fileChangeRecordPath, JSON.stringify({
-						version: 1,
-						changes: fileState.changes
-							.filter(change => change.getCreationTimestamp() > (fileState.loadTimestamp || 0))
-							.map(change => ({
-								start: change.start,
-								end: change.end,
-								type: change.getType(),
-								creationTimestamp: change.getCreationTimestamp(),
-								author: change.getAuthor() || currentUser || (storageType === 'repository' ? 'an unknown user' : ''),
-							})),
-					}));
+					fs.writeFileSync(fileChangeRecordPath, JSON.stringify(dataToSave));
 
 					// Update the global file state
 					fileState.savePath = fileChangeRecordPath;
@@ -399,11 +413,11 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 		return;
 	}
 
-	// Check is Git is initialized at the workspace root (only required for repository storage)
+	// Check is Git is initialized at the workspace root (required for repository and gitnotes storage)
 	const config = vscode.workspace.getConfiguration('tabd');
 	const storageType = config.get<string>('storage', 'repository');
 	
-	if (storageType === 'repository') {
+	if (storageType === 'repository' || storageType === 'experimental') {
 		// Set the current user if not already set
 		if (currentUser === "") {
 			currentUser = getCurrentGitUser(workspaceFolder) || "";
@@ -417,6 +431,36 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 		}
 	}
 
+	// Handle gitnotes storage
+	if (storageType === 'experimental') {
+		const namespace = getGitNotesNamespace(workspaceFolder, document);
+		const noteData = loadFromGitNotes(workspaceFolder, document, namespace);
+		
+		let updatedRanges: ExtendedRange[] = [];
+		
+		for (const fileState of noteData) {
+			if (fileState.version !== 1) {
+				continue; // Unsupported version
+			}
+			
+			const newChanges = fileState.changes.map(change => {
+				return new ExtendedRange(
+					new vscode.Position(change.start.line, change.start.character),
+					new vscode.Position(change.end.line, change.end.character),
+					change.type,
+					change.creationTimestamp,
+					change.author || "",
+				);
+			});
+
+			updatedRanges = mergeRangesSequentially(updatedRanges, newChanges);
+		}
+		
+		globalFileState[filePath].changes = updatedRanges;
+		return;
+	}
+
+	// Handle traditional file-based storage (homeDirectory and repository)
 	const fileChangeRecordDir = getLogDirectory(workspaceFolder, document);
 
 	if (!fs.existsSync(fileChangeRecordDir)) {
@@ -477,13 +521,147 @@ function getStorageDirectory(workspaceFolder: vscode.WorkspaceFolder, document: 
 		return path.join(os.homedir(), '.tabd', 'workspaces', sanitizedPath);
 	} else if (storageType === 'repository') {
 		return path.join(workspaceFolder.uri.fsPath, '.tabd');
+	} else if (storageType === 'experimental') {
+		// For gitnotes, use home directory to store temporary files before applying to git notes
+		const workspacePath = workspaceFolder.uri.fsPath;
+		const sanitizedPath = workspacePath
+			.replace(/[^a-zA-Z0-9]/g, '_')
+			.replace(/_+/g, '_')
+			.replace(/^_|_$/g, '');
+		
+		return path.join(os.homedir(), '.tabd', 'experimental', sanitizedPath);
 	} else {
 		throw new Error(`Unsupported storage type: ${storageType}`);
 	}
 }
 
 function getLogDirectory(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument): string {
-	const baseStorageDir = getStorageDirectory(workspaceFolder, document);
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
+	
+	if (storageType === 'experimental') {
+		// For gitnotes, we don't use a traditional log directory structure
+		// Instead, we create a temp directory for note content files
+		const baseStorageDir = getStorageDirectory(workspaceFolder, document);
+		return path.join(baseStorageDir, 'temp');
+	} else {
+		const baseStorageDir = getStorageDirectory(workspaceFolder, document);
+		const relativePath = vscode.workspace.asRelativePath(document.uri, false);
+		return path.join(baseStorageDir, 'log', relativePath);
+	}
+}
+
+/**
+ * Generate a Git notes namespace for a file
+ * @param workspaceFolder The workspace folder
+ * @param document The document
+ * @returns The Git notes namespace (e.g., "tabd__directory1__file1.txt")
+ */
+function getGitNotesNamespace(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument): string {
 	const relativePath = vscode.workspace.asRelativePath(document.uri, false);
-	return path.join(baseStorageDir, 'log', relativePath);
+	// Replace path separators and special characters with double underscores
+	const namespace = relativePath
+		.replace(/[/\\]/g, '__')
+		.replace(/[^a-zA-Z0-9._-]/g, '_');
+	
+	return `tabd__${namespace}`;
+}
+
+/**
+ * Save data to Git notes
+ * @param workspaceFolder The workspace folder
+ * @param document The document
+ * @param data The data to save
+ * @param namespace The Git notes namespace
+ */
+function saveToGitNotes(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument, data: SerializedFileState, namespace: string): void {
+	try {
+		// Create temporary file with the note content
+		const tempDir = getLogDirectory(workspaceFolder, document);
+		if (!fs.existsSync(tempDir)) {
+			fs.mkdirSync(tempDir, { recursive: true });
+		}
+		
+		const tempFilePath = path.join(tempDir, `${namespace}_${Date.now()}.json`);
+		fs.writeFileSync(tempFilePath, JSON.stringify(data, null, 2));
+		
+		// Get the HEAD commit hash
+		const headCommit = execSync('git rev-parse HEAD', {
+			cwd: workspaceFolder.uri.fsPath,
+			encoding: 'utf8',
+			timeout: 5000,
+		}).trim();
+		
+		// Add the note using the temporary file
+		execSync(`git notes --ref=${namespace} add -f -F "${tempFilePath}" ${headCommit}`, {
+			cwd: workspaceFolder.uri.fsPath,
+			timeout: 10000,
+		});
+		
+		// Clean up temporary file
+		fs.unlinkSync(tempFilePath);
+	} catch (error) {
+		console.warn(`Failed to save to Git notes namespace ${namespace}:`, error);
+		throw error;
+	}
+}
+
+/**
+ * Load data from Git notes
+ * @param workspaceFolder The workspace folder
+ * @param document The document
+ * @param namespace The Git notes namespace
+ * @returns The loaded data or null if not found
+ */
+function loadFromGitNotes(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument, namespace: string): SerializedFileState[] {
+	try {
+		// List all notes for this namespace
+		const notesOutput = execSync(`git notes --ref=${namespace} list`, {
+			cwd: workspaceFolder.uri.fsPath,
+			encoding: 'utf8',
+			timeout: 5000,
+		}).trim();
+		
+		if (!notesOutput) {
+			return [];
+		}
+		
+		const notes: SerializedFileState[] = [];
+		const noteLines = notesOutput.split('\n').filter(line => line.trim());
+		
+		for (const noteLine of noteLines) {
+			const [noteId, commitId] = noteLine.split(' ');
+			if (!noteId || !commitId) {
+				continue;
+			}
+			
+			try {
+				// Get the note content
+				const noteContent = execSync(`git notes --ref=${namespace} show ${commitId}`, {
+					cwd: workspaceFolder.uri.fsPath,
+					encoding: 'utf8',
+					timeout: 5000,
+				});
+				
+				const noteData: SerializedFileState = JSON.parse(noteContent);
+				if (noteData.version === 1) {
+					notes.push(noteData);
+				}
+			} catch (noteError) {
+				console.warn(`Failed to load note ${noteId} for commit ${commitId}:`, noteError);
+			}
+		}
+		
+		// Sort by creation timestamp if available
+		notes.sort((a, b) => {
+			const aTime = a.changes.length > 0 ? Math.min(...a.changes.map(c => c.creationTimestamp)) : 0;
+			const bTime = b.changes.length > 0 ? Math.min(...b.changes.map(c => c.creationTimestamp)) : 0;
+			return aTime - bTime;
+		});
+		
+		return notes;
+	} catch (error) {
+		console.warn(`Failed to load from Git notes namespace ${namespace}:`, error);
+		return [];
+	}
 }

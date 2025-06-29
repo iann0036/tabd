@@ -68,12 +68,14 @@
         "tabd.storage": {
           "type": "string",
           "enum": [
+            "homeDirectory",
             "repository",
-            "homeDirectory"
+            "experimental"
           ],
           "enumDescriptions": [
+            "Store data in your home directory",
             "Store data in the repository",
-            "Store data in your home directory"
+            "Use the experimental storage mode"
           ],
           "default": "homeDirectory",
           "description": "Choose where to store Tab'd data"
