@@ -229,7 +229,7 @@ export function activate(context: vscode.ExtensionContext) {
 					// Prepare the data to save
 					const dataToSave: SerializedFileState = {
 						version: 1,
-						changes: fileState.changes
+						changes: mergeUserEdits(fileState.changes)
 							.filter(change => change.getCreationTimestamp() > (fileState.loadTimestamp || 0))
 							.map(change => ({
 								start: change.start,
@@ -708,4 +708,82 @@ function loadFromGitNotes(workspaceFolder: vscode.WorkspaceFolder, document: vsc
 		console.warn(`Failed to load from Git notes namespace ${namespace}:`, error);
 		return [];
 	}
+}
+
+function mergeUserEdits(userEdits: ExtendedRange[]): ExtendedRange[] {
+	// Filter only USER_EDIT ranges and sort by position
+	const userEditRanges = userEdits
+		.filter(range => range.getType() === ExtendedRangeType.UserEdit)
+		.sort((a, b) => {
+			if (a.start.line !== b.start.line) {
+				return a.start.line - b.start.line;
+			}
+			return a.start.character - b.start.character;
+		});
+
+	if (userEditRanges.length <= 1) {
+		return userEdits; // Nothing to merge
+	}
+
+	const mergedRanges: ExtendedRange[] = [];
+	const nonUserEdits = userEdits.filter(range => range.getType() !== ExtendedRangeType.UserEdit);
+	
+	let currentGroup: ExtendedRange[] = [userEditRanges[0]];
+
+	for (let i = 1; i < userEditRanges.length; i++) {
+		const current = userEditRanges[i];
+		const previous = currentGroup[currentGroup.length - 1];
+
+		// Check if ranges are adjacent (previous.end equals current.start)
+		const areAdjacent = previous.end.isEqual(current.start);
+		
+		// Check if timestamp difference is less than 60 seconds (60000 ms)
+		const timeDiff = Math.abs(current.getCreationTimestamp() - previous.getCreationTimestamp());
+		const withinTimeLimit = timeDiff < 60000;
+
+		if (areAdjacent && withinTimeLimit) {
+			// Add to current group
+			currentGroup.push(current);
+		} else {
+			// Process current group and start a new one
+			if (currentGroup.length > 1) {
+				// Merge the group
+				const earliestTimestamp = Math.min(...currentGroup.map(r => r.getCreationTimestamp()));
+				const mergedRange = new ExtendedRange(
+					currentGroup[0].start,
+					currentGroup[currentGroup.length - 1].end,
+					ExtendedRangeType.UserEdit,
+					earliestTimestamp,
+					currentGroup[0].getAuthor(),
+					currentGroup[0].getOptions()
+				);
+				mergedRanges.push(mergedRange);
+			} else {
+				// Single range, add as is
+				mergedRanges.push(currentGroup[0]);
+			}
+			
+			// Start new group
+			currentGroup = [current];
+		}
+	}
+
+	// Process the last group
+	if (currentGroup.length > 1) {
+		const earliestTimestamp = Math.min(...currentGroup.map(r => r.getCreationTimestamp()));
+		const mergedRange = new ExtendedRange(
+			currentGroup[0].start,
+			currentGroup[currentGroup.length - 1].end,
+			ExtendedRangeType.UserEdit,
+			earliestTimestamp,
+			currentGroup[0].getAuthor(),
+			currentGroup[0].getOptions()
+		);
+		mergedRanges.push(mergedRange);
+	} else if (currentGroup.length === 1) {
+		mergedRanges.push(currentGroup[0]);
+	}
+
+	// Return all ranges (merged user edits + non-user edits)
+	return [...mergedRanges, ...nonUserEdits];
 }
