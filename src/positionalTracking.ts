@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { ExtendedRange, ExtendedRangeType } from './extendedRange';
+import { ExtendedRange, ExtendedRangeType, ExtendedRangeOptions } from './extendedRange';
+import * as fs from 'fs';
 
 const getUpdatedPosition = (
    position: vscode.Position,
@@ -105,7 +106,12 @@ const getUpdatedRanges = (
          if (pasteContent.length > 0) {
             recentPaste = checkRecentPaste(pasteContent);
          }
-         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.Paste, Date.now(), '', recentPaste.url || '', recentPaste.title || ''));
+
+         const options = new ExtendedRangeOptions();
+         options.pasteUrl = recentPaste.url || '';
+         options.pasteTitle = recentPaste.title || '';
+
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.Paste, Date.now(), '', options));
       } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
          additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
       } else if (change.text.trim().length <= 1) {
@@ -114,9 +120,26 @@ const getUpdatedRanges = (
          if (!change.range.start.isEqual(change.range.end)) { // TODO: and if the delta text matches
             isAI = true;
          }
-         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIGenerated, Date.now()));
+
+         const options = new ExtendedRangeOptions();
+         try {
+            const aiData = fs.readFileSync(`${require('os').homedir()}/.tabd/latest_ai.json`, 'utf8');
+            const aiStat = fs.statSync(`${require('os').homedir()}/.tabd/latest_ai.json`);
+            const aiInfo = JSON.parse(aiData);
+            if (aiInfo.insertText === change.text &&
+               change.range.start.line === aiInfo.range[0].line &&
+               change.range.start.character === aiInfo.range[0].character &&
+               change.range.end.line === aiInfo.range[1].line &&
+               change.range.end.character === aiInfo.range[1].character &&
+               aiStat.mtimeMs > Date.now() - 2000
+            ) {
+               options.aiName = 'GitHub Copilot';
+               options.aiModel = aiInfo.command.arguments[0].telemetry.properties.engineName || '';
+            }
+         } catch (error) { }
+
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIGenerated, Date.now(), '', options));
       }
-      //
 
       for (let i = 0; i < toUpdateRanges.length; i++) {
          // ** onDeletion **
@@ -147,7 +170,7 @@ const getUpdatedRanges = (
                      newRangeEnd = aiChangeRangeStart;
                   }
 
-                  additionalRanges.push(new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor(), currentRange.getPasteUrl(), currentRange.getPasteTitle()));
+                  additionalRanges.push(new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor(), currentRange.getOptions()));
                   toUpdateRanges[i] = null;
                } else if (onDeletion === 'remove') {
                   toUpdateRanges[i] = null;
@@ -166,7 +189,7 @@ const getUpdatedRanges = (
                   if (newRangeEnd.isBefore(newRangeStart)) {
                      toUpdateRanges[i] = null;
                   } else {
-                     toUpdateRanges[i] = new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor(), currentRange.getPasteUrl(), currentRange.getPasteTitle());
+                     toUpdateRanges[i] = new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor(), currentRange.getOptions());
                   }
                }
             }
@@ -190,9 +213,9 @@ const getUpdatedRanges = (
                   toUpdateRanges.splice(
                      i + 1,
                      0,
-                     new ExtendedRange(change.range.start, updatedRange.end, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getPasteUrl(), updatedRange.getPasteTitle())
+                     new ExtendedRange(change.range.start, updatedRange.end, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getOptions())
                   );
-                  toUpdateRanges[i] = new ExtendedRange(updatedRange.start, change.range.start, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getPasteUrl(), updatedRange.getPasteTitle());
+                  toUpdateRanges[i] = new ExtendedRange(updatedRange.start, change.range.start, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getOptions());
                }
             }
          }
@@ -215,7 +238,7 @@ const getUpdatedRanges = (
             updatedRangeEnd = getUpdatedPosition(finalRange.end, change);
          }
 
-         toUpdateRanges[i] = new ExtendedRange(updatedRangeStart, updatedRangeEnd, finalRange.getType(), finalRange.getCreationTimestamp(), finalRange.getAuthor(), finalRange.getPasteUrl(), finalRange.getPasteTitle());
+         toUpdateRanges[i] = new ExtendedRange(updatedRangeStart, updatedRangeEnd, finalRange.getType(), finalRange.getCreationTimestamp(), finalRange.getAuthor(), finalRange.getOptions());
       }
    }
    

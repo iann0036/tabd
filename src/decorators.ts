@@ -65,7 +65,7 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
             editor.setDecorations(aiGeneratedDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.AIGenerated).map(range => {
                 return {
                     range: range,
-                    hoverMessage: `AI Generated under ${range.getAuthor() ? (range.getAuthor() + "'s") : 'your'} control • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
+                    hoverMessage: `AI Generated under ${range.getAuthor() ? (range.getAuthor() + "'s") : 'your'} control${range.getAiName() !== '' ? ` • ${range.getAiName()} (${range.getAiModel()})` : ''} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
                 };
             }));
             editor.setDecorations(undoRedoDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UndoRedo).map(range => {

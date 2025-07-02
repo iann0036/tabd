@@ -8,12 +8,18 @@ export enum ExtendedRangeType {
     Paste = "PASTE",
 }
 
+export class ExtendedRangeOptions {
+	pasteUrl?: string;
+	pasteTitle?: string;
+	aiName?: string;
+	aiModel?: string;
+}
+
 export class ExtendedRange extends vscode.Range {
-    private readonly creationTimestamp: number;
+    private creationTimestamp: number;
     private rangeType: ExtendedRangeType;
     private author: string;
-	private pasteUrl: string;
-	private pasteTitle: string;
+	private options: ExtendedRangeOptions;
 
     constructor(
         start: vscode.Position,
@@ -21,15 +27,13 @@ export class ExtendedRange extends vscode.Range {
         rangeType: ExtendedRangeType = ExtendedRangeType.Unknown,
         creationTimestamp: number = Date.now(),
         author: string = '',
-		pasteUrl: string = '',
-		pasteTitle: string = '',
+		options: ExtendedRangeOptions = {},
     ) {
         super(start, end);
         this.rangeType = rangeType;
         this.creationTimestamp = creationTimestamp;
         this.author = author;
-		this.pasteUrl = pasteUrl;
-		this.pasteTitle = pasteTitle;
+		this.options = options;
     }
 
     getType(): ExtendedRangeType {
@@ -45,11 +49,35 @@ export class ExtendedRange extends vscode.Range {
     }
 
 	getPasteUrl(): string {
-		return this.pasteUrl;
+		return this.options.pasteUrl || '';
 	}
 
 	getPasteTitle(): string {
-		return this.pasteTitle;
+		return this.options.pasteTitle || '';
+	}
+
+	getAiName(): string {
+		return this.options.aiName || '';
+	}
+
+	getAiModel(): string {
+		return this.options.aiModel || '';
+	}
+
+	setType(type: ExtendedRangeType): void {
+		this.rangeType = type;
+	}
+
+	setCreationTimestamp(timestamp: number): void {
+		this.creationTimestamp = timestamp;
+	}
+
+	setAuthor(author: string): void {
+		this.author = author;
+	}
+
+	getOptions(): ExtendedRangeOptions {
+		return this.options;
 	}
 }
 
@@ -124,8 +152,7 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 							existingRange.getType(),
 							existingRange.getCreationTimestamp(),
 							existingRange.getAuthor(),
-							existingRange.getPasteUrl(),
-							existingRange.getPasteTitle()
+							existingRange.getOptions(),
 						);
 						const afterRange = new ExtendedRange(
 							newRange.end,
@@ -133,8 +160,7 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 							existingRange.getType(),
 							existingRange.getCreationTimestamp(),
 							existingRange.getAuthor(),
-							existingRange.getPasteUrl(),
-							existingRange.getPasteTitle()
+							existingRange.getOptions(),
 						);
 						
 						// Only add non-empty ranges
@@ -155,8 +181,7 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 								existingRange.getType(),
 								existingRange.getCreationTimestamp(),
 								existingRange.getAuthor(),
-								existingRange.getPasteUrl(),
-								existingRange.getPasteTitle()
+								existingRange.getOptions(),
 							);
 							if (!beforeRange.start.isEqual(beforeRange.end)) {
 								resultingRanges.push(beforeRange);
@@ -171,8 +196,7 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 								existingRange.getType(),
 								existingRange.getCreationTimestamp(),
 								existingRange.getAuthor(),
-								existingRange.getPasteUrl(),
-								existingRange.getPasteTitle()
+								existingRange.getOptions(),
 							);
 							if (!afterRange.start.isEqual(afterRange.end)) {
 								resultingRanges.push(afterRange);
@@ -192,8 +216,7 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 							newRange.getType(),
 							newRange.getCreationTimestamp(),
 							newRange.getAuthor(),
-							newRange.getPasteUrl(),
-							newRange.getPasteTitle()
+							newRange.getOptions(),
 						);
 						const afterRange = new ExtendedRange(
 							existingRange.end,
@@ -201,8 +224,7 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 							newRange.getType(),
 							newRange.getCreationTimestamp(),
 							newRange.getAuthor(),
-							newRange.getPasteUrl(),
-							newRange.getPasteTitle()
+							newRange.getOptions(),
 						);
 						
 						// Only add non-empty ranges
@@ -223,8 +245,7 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 								newRange.getType(),
 								newRange.getCreationTimestamp(),
 								newRange.getAuthor(),
-								newRange.getPasteUrl(),
-								newRange.getPasteTitle()
+								newRange.getOptions(),
 							);
 							if (!beforeRange.start.isEqual(beforeRange.end)) {
 								resultingRanges.push(beforeRange);
@@ -239,8 +260,7 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 								newRange.getType(),
 								newRange.getCreationTimestamp(),
 								newRange.getAuthor(),
-								newRange.getPasteUrl(),
-								newRange.getPasteTitle()
+								newRange.getOptions(),
 							);
 							if (!afterRange.start.isEqual(afterRange.end)) {
 								resultingRanges.push(afterRange);
