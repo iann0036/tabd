@@ -451,14 +451,14 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 			if (fileState.version !== 1) {
 				continue; // Unsupported version
 			}
-
-			const options = new ExtendedRangeOptions();
-			options.pasteUrl = fileState.changes[0]?.pasteUrl || "";
-			options.pasteTitle = fileState.changes[0]?.pasteTitle || "";
-			options.aiName = fileState.changes[0]?.aiName || "";
-			options.aiModel = fileState.changes[0]?.aiModel || "";
 			
 			const newChanges = fileState.changes.map(change => {
+				const options = new ExtendedRangeOptions();
+				options.pasteUrl = change.pasteUrl || "";
+				options.pasteTitle = change.pasteTitle || "";
+				options.aiName = change.aiName || "";
+				options.aiModel = change.aiModel || "";
+
 				return new ExtendedRange(
 					new vscode.Position(change.start.line, change.start.character),
 					new vscode.Position(change.end.line, change.end.character),
