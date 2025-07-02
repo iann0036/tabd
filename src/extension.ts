@@ -9,6 +9,7 @@ import { fsPath, uniqueFileName, shouldProcessFile } from './utils';
 import { ExtendedRange, ExtendedRangeOptions, ExtendedRangeType, mergeRangesSequentially } from './extendedRange';
 import { PasteEditProvider } from './pasteEditProvider';
 import { triggerDecorationUpdate } from './decorators';
+import { createHash } from 'crypto';
 
 var editLock = new Mutex();
 var globalFileState: {
@@ -579,13 +580,15 @@ function getGitNotesNamespace(workspaceFolder: vscode.WorkspaceFolder, document:
 		.replace(/[/\\]/g, '__')
 		.replace(/[^a-zA-Z0-9._-]/g, '_');
 
+	const sha256namespace = createHash('sha256').update(namespace).digest('hex');
+
 	const branchNameOutput = execSync(`git rev-parse --abbrev-ref HEAD`, {
 		cwd: workspaceFolder.uri.fsPath,
 		encoding: 'utf8',
 		timeout: 2000,
 	}).trim();
 	
-	return `tabd__${branchNameOutput}__${namespace}`;
+	return `tabd__${branchNameOutput}__${sha256namespace}`;
 }
 
 /**
