@@ -6,7 +6,7 @@ import { execSync } from 'child_process';
 import { getUpdatedRanges } from "./positionalTracking";
 import { Mutex } from 'async-mutex';
 import { fsPath, uniqueFileName, shouldProcessFile } from './utils';
-import { ExtendedRange, ExtendedRangeType, mergeRangesSequentially } from './extendedRange';
+import { ExtendedRange, ExtendedRangeOptions, ExtendedRangeType, mergeRangesSequentially } from './extendedRange';
 import { PasteEditProvider } from './pasteEditProvider';
 import { triggerDecorationUpdate } from './decorators';
 
@@ -26,6 +26,10 @@ interface SerializedChange {
 	type: ExtendedRangeType;
 	creationTimestamp: number;
 	author?: string;
+	pasteUrl?: string;
+	pasteTitle?: string;
+	aiName?: string;
+	aiModel?: string;
 }
 
 interface SerializedFileState {
@@ -234,6 +238,8 @@ export function activate(context: vscode.ExtensionContext) {
 								author: change.getAuthor() || currentUser || ((storageType === 'repository' || storageType === 'experimental') ? 'an unknown user' : ''),
 								pasteUrl: change.getPasteUrl() || '',
 								pasteTitle: change.getPasteTitle() || '',
+								aiName: change.getAiName() || '',
+								aiModel: change.getAiModel() || '',
 							})),
 					};
 
@@ -444,6 +450,12 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 			if (fileState.version !== 1) {
 				continue; // Unsupported version
 			}
+
+			const options = new ExtendedRangeOptions();
+			options.pasteUrl = fileState.changes[0]?.pasteUrl || "";
+			options.pasteTitle = fileState.changes[0]?.pasteTitle || "";
+			options.aiName = fileState.changes[0]?.aiName || "";
+			options.aiModel = fileState.changes[0]?.aiModel || "";
 			
 			const newChanges = fileState.changes.map(change => {
 				return new ExtendedRange(
@@ -452,6 +464,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 					change.type,
 					change.creationTimestamp,
 					change.author || "",
+					options,
 				);
 			});
 
