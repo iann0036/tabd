@@ -94,12 +94,18 @@ const getUpdatedRanges = (
          for (const pasteRange of pasteRanges) {
             if (pasteRange.start.isEqual(change.range.start) && pasteRange.getCreationTimestamp() > Date.now() - 200) {
                reason = ExtendedRangeType.Paste;
+               break;
             }
          }
       }
 
       if (reason === ExtendedRangeType.Paste) {
-         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.Paste, Date.now()));
+         const pasteContent = change.text.trim();
+         let recentPaste = {url: '', title: ''};
+         if (pasteContent.length > 0) {
+            recentPaste = checkRecentPaste(pasteContent);
+         }
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.Paste, Date.now(), '', recentPaste.url || '', recentPaste.title || ''));
       } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
          additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
       } else if (change.text.trim().length <= 1) {
@@ -141,7 +147,7 @@ const getUpdatedRanges = (
                      newRangeEnd = aiChangeRangeStart;
                   }
 
-                  additionalRanges.push(new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor()));
+                  additionalRanges.push(new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor(), currentRange.getPasteUrl(), currentRange.getPasteTitle()));
                   toUpdateRanges[i] = null;
                } else if (onDeletion === 'remove') {
                   toUpdateRanges[i] = null;
@@ -160,7 +166,7 @@ const getUpdatedRanges = (
                   if (newRangeEnd.isBefore(newRangeStart)) {
                      toUpdateRanges[i] = null;
                   } else {
-                     toUpdateRanges[i] = new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor());
+                     toUpdateRanges[i] = new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor(), currentRange.getPasteUrl(), currentRange.getPasteTitle());
                   }
                }
             }
@@ -184,9 +190,9 @@ const getUpdatedRanges = (
                   toUpdateRanges.splice(
                      i + 1,
                      0,
-                     new ExtendedRange(change.range.start, updatedRange.end, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor())
+                     new ExtendedRange(change.range.start, updatedRange.end, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getPasteUrl(), updatedRange.getPasteTitle())
                   );
-                  toUpdateRanges[i] = new ExtendedRange(updatedRange.start, change.range.start, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor());
+                  toUpdateRanges[i] = new ExtendedRange(updatedRange.start, change.range.start, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getPasteUrl(), updatedRange.getPasteTitle());
                }
             }
          }
@@ -209,7 +215,7 @@ const getUpdatedRanges = (
             updatedRangeEnd = getUpdatedPosition(finalRange.end, change);
          }
 
-         toUpdateRanges[i] = new ExtendedRange(updatedRangeStart, updatedRangeEnd, finalRange.getType(), finalRange.getCreationTimestamp(), finalRange.getAuthor());
+         toUpdateRanges[i] = new ExtendedRange(updatedRangeStart, updatedRangeEnd, finalRange.getType(), finalRange.getCreationTimestamp(), finalRange.getAuthor(), finalRange.getPasteUrl(), finalRange.getPasteTitle());
       }
    }
    
@@ -247,5 +253,28 @@ const getUpdatedRanges = (
 
    return updatedRanges;
 };
+
+function checkRecentPaste(content: string) {
+   // Read from home directory file
+   const homeDir = require('os').homedir();
+   const recentPastesFile = `${homeDir}/.tabd/latest_clipboard.json`;
+   /*
+   {
+   "type": "clipboard_copy",
+   "text": "bd-extension\nPrivate",
+   "timestamp": 1751376150324,
+   "url": "https://github.com/iann0036/tabd-extension",
+   "title": "iann0036/tabd-extension"
+   }
+  */
+   try {
+      const data = require('fs').readFileSync(recentPastesFile, 'utf8');
+      const recentPastes = JSON.parse(data);
+      if (recentPastes.type === 'clipboard_copy' && recentPastes.text.trim() === content && recentPastes.timestamp > Date.now() - 3600000) { // 1 hour
+         return recentPastes;
+      }
+   } catch (error) {}
+   return null;
+}
 
 export { getUpdatedRanges, getUpdatedPosition };

@@ -185,8 +185,8 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 
 		// Register the listener for saving text documents
-		vscode.workspace.onDidSaveTextDocument(e => {
-			if (e.uri.scheme !== 'file' || !shouldProcessFile(e.uri)) {
+		vscode.workspace.onDidSaveTextDocument(document => {
+			if (document.uri.scheme !== 'file' || !shouldProcessFile(document.uri)) {
 				return;
 			}
 			
@@ -197,20 +197,20 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 			
-			if (globalFileState[fsPath(e.uri)]) {
+			if (globalFileState[fsPath(document.uri)]) {
 				editLock.runExclusive(() => {
 					// Save the current state of the file
-					const fileState = globalFileState[fsPath(e.uri)];
+					const fileState = globalFileState[fsPath(document.uri)];
 
 					// If there are no changes recorded, skip saving
 					if (!fileState || fileState.changes.length === 0) {
-						console.warn(`No changes recorded for ${e.uri.fsPath}. Skipping file state save.`);
+						console.warn(`No changes recorded for ${document.uri.fsPath}. Skipping file state save.`);
 						return;
 					}
 
-					const workspaceFolder = vscode.workspace.getWorkspaceFolder(e.uri);
+					const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
 					if (!workspaceFolder) {
-						console.warn(`No workspace folder found for ${e.uri.fsPath}. Cannot save file state.`);
+						console.warn(`No workspace folder found for ${document.uri.fsPath}. Cannot save file state.`);
 						return;
 					}
 
@@ -232,6 +232,8 @@ export function activate(context: vscode.ExtensionContext) {
 								type: change.getType(),
 								creationTimestamp: change.getCreationTimestamp(),
 								author: change.getAuthor() || currentUser || ((storageType === 'repository' || storageType === 'experimental') ? 'an unknown user' : ''),
+								pasteUrl: change.getPasteUrl() || '',
+								pasteTitle: change.getPasteTitle() || '',
 							})),
 					};
 
@@ -247,10 +249,10 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 
 						try {
-							const namespace = getGitNotesNamespace(workspaceFolder, e);
-							saveToGitNotes(workspaceFolder, e, dataToSave, namespace);
+							const namespace = getGitNotesNamespace(workspaceFolder, document);
+							saveToGitNotes(workspaceFolder, document, dataToSave, namespace);
 							
-							globalFileState[fsPath(e.uri)] = fileState;
+							globalFileState[fsPath(document.uri)] = fileState;
 						} catch (error) {
 							console.error('Failed to save to Git notes:', error);
 						}
@@ -275,14 +277,14 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 					
 					// Get the appropriate storage directory
-					const baseStorageDir = getStorageDirectory(workspaceFolder, e);
+					const baseStorageDir = getStorageDirectory(workspaceFolder, document);
 					if (!fs.existsSync(baseStorageDir)) {
 						fs.mkdirSync(baseStorageDir, { recursive: true });
 						// TODO: Make a README.md file in the storage directory
 					}
 
 					// Write the file state to a JSON file
-					const fileChangeRecordDir = getLogDirectory(workspaceFolder, e);
+					const fileChangeRecordDir = getLogDirectory(workspaceFolder, document);
 					const fileChangeRecordPath = path.join(fileChangeRecordDir, uniqueFileName());
 					if (!fs.existsSync(fileChangeRecordDir)) {
 						fs.mkdirSync(fileChangeRecordDir, { recursive: true });
@@ -296,7 +298,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 					// Update the global file state
 					fileState.savePath = fileChangeRecordPath;
-					globalFileState[fsPath(e.uri)] = fileState;
+					globalFileState[fsPath(document.uri)] = fileState;
 				});
 			}
 		}),
@@ -563,8 +565,14 @@ function getGitNotesNamespace(workspaceFolder: vscode.WorkspaceFolder, document:
 	const namespace = relativePath
 		.replace(/[/\\]/g, '__')
 		.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+	const branchNameOutput = execSync(`git rev-parse --abbrev-ref HEAD`, {
+		cwd: workspaceFolder.uri.fsPath,
+		encoding: 'utf8',
+		timeout: 2000,
+	}).trim();
 	
-	return `tabd__${namespace}`;
+	return `tabd__${branchNameOutput}__${namespace}`;
 }
 
 /**

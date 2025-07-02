@@ -9,25 +9,25 @@ const userEditDecorator = vscode.window.createTextEditorDecorationType({
 
 const aiGeneratedDecorator = vscode.window.createTextEditorDecorationType({
     // cyan background
-	backgroundColor: "#00ffff33",
+	backgroundColor: "#00ffff26",
 	//isWholeLine: true,
 	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
 });
 
 const undoRedoDecorator = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "#80008033",
+	backgroundColor: "#80008026",
 	//isWholeLine: true,
 	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
 });
 
 const unknownDecorator = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "#ff000033",
+	backgroundColor: "#ff000026",
 	//isWholeLine: true,
 	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
 });
 
 const pasteDecorator = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "#ff880033",
+	backgroundColor: "#ff880026",
 	//isWholeLine: true,
 	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
 });
@@ -77,7 +77,7 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
             editor.setDecorations(pasteDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Paste).map(range => {
                 return {
                     range: range,
-                    hoverMessage: `Clipboard Paste by ${range.getAuthor() || 'you'} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
+                    hoverMessage: `Clipboard Paste by ${range.getAuthor() || 'you'}${range.getPasteUrl() !== '' ? ` • From the webpage [${range.getPasteTitle()}](${range.getPasteUrl()})` : ''} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
                 };
             }));
             editor.setDecorations(unknownDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Unknown).map(range => {
