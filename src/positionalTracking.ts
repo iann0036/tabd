@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ExtendedRange, ExtendedRangeType, ExtendedRangeOptions } from './extendedRange';
 import * as fs from 'fs';
+import { execSync } from 'child_process';
 
 const getUpdatedPosition = (
    position: vscode.Position,
@@ -62,7 +63,7 @@ const getUpdatedRanges = (
    pasteRanges: ExtendedRange[],
    changes: readonly vscode.TextDocumentContentChangeEvent[],
    options: UpdateOptions,
-   reason: (vscode.TextDocumentChangeReason | ExtendedRangeType.Paste | undefined),
+   reason: (vscode.TextDocumentChangeReason | ExtendedRangeType.Paste | ExtendedRangeType.IDEPaste | undefined),
    document: vscode.TextDocument
 ): ExtendedRange[] => {
    let toUpdateRanges: (ExtendedRange | null)[] = [...ranges];
@@ -100,18 +101,28 @@ const getUpdatedRanges = (
          }
       }
 
-      if (reason === ExtendedRangeType.Paste) {
+      if (reason === ExtendedRangeType.Paste || reason === ExtendedRangeType.IDEPaste) {
+         const options = new ExtendedRangeOptions();
          const pasteContent = change.text.trim();
-         let recentPaste = {url: '', title: ''};
+         let recentPaste = {url: '', title: '', type: 'clipboard_copy', workspacePath: '', relativePath: ''};
          if (pasteContent.length > 0) {
             recentPaste = checkRecentPaste(pasteContent);
+            if (recentPaste && recentPaste.type === 'ide_clipboard_copy') {
+               reason = ExtendedRangeType.IDEPaste;
+               const ideProps = resolveIDEPaste(recentPaste.workspacePath, recentPaste.relativePath);
+               options.pasteUrl = ideProps.url || '';
+               options.pasteTitle = ideProps.title || '';
+            } else {
+               options.pasteUrl = recentPaste.url || '';
+               options.pasteTitle = recentPaste.title || '';
+            }
+         } else {
+            options.pasteUrl = '';
+            options.pasteTitle = '';
          }
 
-         const options = new ExtendedRangeOptions();
-         options.pasteUrl = recentPaste.url || '';
-         options.pasteTitle = recentPaste.title || '';
 
-         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.Paste, Date.now(), '', options));
+         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), reason, Date.now(), '', options));
       } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
          additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
       } else if (change.text.trim().length <= 1) {
@@ -283,21 +294,59 @@ function checkRecentPaste(content: string) {
    const recentPastesFile = `${homeDir}/.tabd/latest_clipboard.json`;
    /*
    {
-   "type": "clipboard_copy",
-   "text": "bd-extension\nPrivate",
+   "type": "clipboard_copy|ide_clipboard_copy",
+   "text": "sometext",
    "timestamp": 1751376150324,
-   "url": "https://github.com/iann0036/tabd-extension",
-   "title": "iann0036/tabd-extension"
+   "url": "https://example.com",
+   "title": "Example Domain"
    }
   */
    try {
       const data = require('fs').readFileSync(recentPastesFile, 'utf8');
       const recentPastes = JSON.parse(data);
-      if (recentPastes.type === 'clipboard_copy' && recentPastes.text.trim() === content && recentPastes.timestamp > Date.now() - 3600000) { // 1 hour
+      if ((recentPastes.type === 'clipboard_copy' || recentPastes.type === 'ide_clipboard_copy') && recentPastes.text.trim() === content && recentPastes.timestamp > Date.now() - 3600000) { // 1 hour
          return recentPastes;
       }
    } catch (error) {}
    return null;
+}
+
+function resolveIDEPaste(workspacePath: string, relativePath: string): { url: string, title: string } {
+   // Get Git information for the document
+   let gitUrl = '';
+   let branchName = 'main';
+   
+   try {
+      // Get the Git repository URL
+      const remoteUrl = execSync('git config --get remote.origin.url', {
+         cwd: workspacePath,
+         encoding: 'utf8',
+         timeout: 2000,
+      }).trim();
+      
+      // Clean up the URL for display (remove .git suffix and convert SSH to HTTPS if needed)
+      if (remoteUrl.startsWith('git@')) {
+         // Convert SSH URL to HTTPS
+         gitUrl = remoteUrl
+            .replace(/^git@([^:]+):/, 'https://$1/')
+            .replace(/\.git$/, '');
+      } else if (remoteUrl.startsWith('https://')) {
+         gitUrl = remoteUrl.replace(/\.git$/, '');
+      } else {
+         gitUrl = remoteUrl;
+      }
+      
+      // Get the current branch name
+      branchName = execSync('git rev-parse --abbrev-ref HEAD', {
+         cwd: workspacePath,
+         encoding: 'utf8',
+         timeout: 2000,
+      }).trim();
+   } catch (gitError) {
+      console.warn('Failed to get Git information:', gitError);
+   }
+
+   return { url: gitUrl, title: relativePath + (branchName === 'main' || branchName === 'master' ? '' : ` (on branch ${branchName})`) };
 }
 
 export { getUpdatedRanges, getUpdatedPosition };

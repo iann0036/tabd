@@ -6,6 +6,7 @@ export enum ExtendedRangeType {
     AIGenerated = "AI_GENERATED",
     UndoRedo = "UNDO_REDO",
     Paste = "PASTE",
+    IDEPaste = "IDE_PASTE",
 }
 
 export class ExtendedRangeOptions {

@@ -32,6 +32,12 @@ const pasteDecorator = vscode.window.createTextEditorDecorationType({
 	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
 });
 
+const idePasteDecorator = vscode.window.createTextEditorDecorationType({
+	backgroundColor: "#a4f54226",
+	//isWholeLine: true,
+	rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
+});
+
 export function triggerDecorationUpdate(d: vscode.TextDocument, updatedRanges: ExtendedRange[]) {
     const config = vscode.workspace.getConfiguration('tabd');
     const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
@@ -48,6 +54,7 @@ export function triggerDecorationUpdate(d: vscode.TextDocument, updatedRanges: E
             editor.setDecorations(aiGeneratedDecorator, []);
             editor.setDecorations(undoRedoDecorator, []);
             editor.setDecorations(pasteDecorator, []);
+            editor.setDecorations(idePasteDecorator, []);
             editor.setDecorations(unknownDecorator, []);
         }
     }
@@ -78,6 +85,12 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
                 return {
                     range: range,
                     hoverMessage: `Clipboard Paste by ${range.getAuthor() || 'you'}${range.getPasteUrl() !== '' ? ` • From the webpage [${range.getPasteTitle()}](${range.getPasteUrl()})` : ''} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
+                };
+            }));
+            editor.setDecorations(idePasteDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.IDEPaste).map(range => {
+                return {
+                    range: range,
+                    hoverMessage: `Clipboard Paste by ${range.getAuthor() || 'you'}${range.getPasteUrl() !== '' ? ` • From the [${range.getPasteUrl()}](${range.getPasteUrl()}) repository at \`${range.getPasteTitle()}\`` : ''} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
                 };
             }));
             editor.setDecorations(unknownDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.Unknown).map(range => {
