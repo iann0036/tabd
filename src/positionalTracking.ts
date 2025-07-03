@@ -112,7 +112,7 @@ const getUpdatedRanges = (
                const ideProps = resolveIDEPaste(recentPaste.workspacePath, recentPaste.relativePath);
                options.pasteUrl = ideProps.url || '';
                options.pasteTitle = ideProps.title || '';
-            } else {
+            } else if (recentPaste) {
                options.pasteUrl = recentPaste.url || '';
                options.pasteTitle = recentPaste.title || '';
             }
