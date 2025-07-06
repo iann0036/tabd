@@ -135,16 +135,15 @@ const getUpdatedRanges = (
          const options = new ExtendedRangeOptions();
          try {
             const aiData = fs.readFileSync(`${require('os').homedir()}/.tabd/latest_ai.json`, 'utf8');
-            const aiStat = fs.statSync(`${require('os').homedir()}/.tabd/latest_ai.json`);
             const aiInfo = JSON.parse(aiData);
             if (aiInfo.insertText === change.text &&
                change.range.start.line === aiInfo.range[0].line &&
                change.range.start.character === aiInfo.range[0].character &&
                change.range.end.line === aiInfo.range[1].line &&
                change.range.end.character === aiInfo.range[1].character &&
-               aiStat.mtimeMs > Date.now() - 2000
+               aiInfo._timestamp > Date.now() - 2000
             ) {
-               options.aiName = 'GitHub Copilot';
+               options.aiName = aiInfo._extensionName || 'unknown';
                options.aiModel = aiInfo.command.arguments[0].telemetry.properties.engineName || '';
             }
          } catch (error) { }
