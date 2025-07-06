@@ -136,6 +136,11 @@ const getUpdatedRanges = (
          try {
             const aiData = fs.readFileSync(`${require('os').homedir()}/.tabd/latest_ai.json`, 'utf8');
             const aiInfo = JSON.parse(aiData);
+
+            if (!aiInfo.range) {
+               aiInfo.range = [change.range.start, change.range.end]; // TODO: should be whole document range
+            }
+
             if (aiInfo.insertText === change.text &&
                change.range.start.line === aiInfo.range[0].line &&
                change.range.start.character === aiInfo.range[0].character &&
@@ -144,7 +149,7 @@ const getUpdatedRanges = (
                aiInfo._timestamp > Date.now() - 2000
             ) {
                options.aiName = aiInfo._extensionName || 'unknown';
-               options.aiModel = aiInfo.command.arguments[0].telemetry.properties.engineName || '';
+               options.aiModel = aiInfo._modelId || aiInfo.command.arguments[0].telemetry.properties.engineName || '';
             }
          } catch (error) { }
 
