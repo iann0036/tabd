@@ -10,6 +10,7 @@ export interface SerializedChange {
     pasteTitle?: string;
     aiName?: string;
     aiModel?: string;
+    aiExplanation?: string;
 }
 
 export interface SerializedFileState {

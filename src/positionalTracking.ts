@@ -141,7 +141,7 @@ const getUpdatedRanges = (
                aiInfo.range = [change.range.start, change.range.end]; // TODO: should be whole document range
             }
 
-            if (aiInfo.insertText === change.text &&
+            if (aiInfo.insertText.includes(change.text) &&
                change.range.start.line === aiInfo.range[0].line &&
                change.range.start.character === aiInfo.range[0].character &&
                change.range.end.line === aiInfo.range[1].line &&
@@ -150,6 +150,7 @@ const getUpdatedRanges = (
             ) {
                options.aiName = aiInfo._extensionName || 'unknown';
                options.aiModel = aiInfo._modelId || aiInfo.command.arguments[0].telemetry.properties.engineName || '';
+               options.aiExplanation = aiInfo._explanation || '';
             }
          } catch (error) { }
 

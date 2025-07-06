@@ -14,6 +14,7 @@ export class ExtendedRangeOptions {
 	pasteTitle?: string;
 	aiName?: string;
 	aiModel?: string;
+	aiExplanation?: string;
 }
 
 export class ExtendedRange extends vscode.Range {
@@ -65,6 +66,10 @@ export class ExtendedRange extends vscode.Range {
 		return this.options.aiModel || '';
 	}
 
+	getAiExplanation(): string {
+		return this.options.aiExplanation || '';
+	}
+
 	setType(type: ExtendedRangeType): void {
 		this.rangeType = type;
 	}
@@ -94,7 +99,10 @@ function deduplicateRanges(ranges: ExtendedRange[]): ExtendedRange[] {
             existing.getCreationTimestamp() === range.getCreationTimestamp() &&
             existing.getAuthor() === range.getAuthor() &&
 			existing.getPasteUrl() === range.getPasteUrl() &&
-			existing.getPasteTitle() === range.getPasteTitle()
+			existing.getPasteTitle() === range.getPasteTitle() &&
+			existing.getAiName() === range.getAiName() &&
+			existing.getAiModel() === range.getAiModel() &&
+			existing.getAiExplanation() === range.getAiExplanation()
         );
         
         if (!isDuplicate) {

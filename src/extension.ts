@@ -216,6 +216,7 @@ export function activate(context: vscode.ExtensionContext) {
 								pasteTitle: change.getPasteTitle() || '',
 								aiName: change.getAiName() || '',
 								aiModel: change.getAiModel() || '',
+								aiExplanation: change.getAiExplanation() || '',
 							})),
 					};
 
@@ -405,6 +406,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 				options.pasteTitle = change.pasteTitle || "";
 				options.aiName = change.aiName || "";
 				options.aiModel = change.aiModel || "";
+				options.aiExplanation = change.aiExplanation || "";
 
 				return new ExtendedRange(
 					new vscode.Position(change.start.line, change.start.character),
@@ -456,6 +458,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 				options.pasteTitle = change.pasteTitle || "";
 				options.aiName = change.aiName || "";
 				options.aiModel = change.aiModel || "";
+				options.aiExplanation = change.aiExplanation || "";
 
 				return new ExtendedRange(
 					new vscode.Position(change.start.line, change.start.character),
