@@ -2,6 +2,7 @@ import { URI } from "vscode-uri";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
+import * as os from "os";
 
 export const isWin = process.platform.startsWith("win");
 
@@ -90,4 +91,49 @@ export function shouldProcessFile(uri: URI): boolean {
 	}
 	
 	return true;
+}
+
+export function getStorageDirectory(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument): string {
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
+	
+	if (storageType === 'homeDirectory') {
+		// Create sanitized workspace path for home directory storage
+		const workspacePath = workspaceFolder.uri.fsPath;
+		const sanitizedPath = workspacePath
+			.replace(/[^a-zA-Z0-9]/g, '_')
+			.replace(/_+/g, '_')
+			.replace(/^_|_$/g, '');
+		
+		return path.join(os.homedir(), '.tabd', 'workspaces', sanitizedPath);
+	} else if (storageType === 'repository') {
+		return path.join(workspaceFolder.uri.fsPath, '.tabd');
+	} else if (storageType === 'experimental') {
+		// For gitnotes, use home directory to store temporary files before applying to git notes
+		const workspacePath = workspaceFolder.uri.fsPath;
+		const sanitizedPath = workspacePath
+			.replace(/[^a-zA-Z0-9]/g, '_')
+			.replace(/_+/g, '_')
+			.replace(/^_|_$/g, '');
+		
+		return path.join(os.homedir(), '.tabd', 'experimental', sanitizedPath);
+	} else {
+		throw new Error(`Unsupported storage type: ${storageType}`);
+	}
+}
+
+export function getLogDirectory(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument): string {
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
+	
+	if (storageType === 'experimental') {
+		// For gitnotes, we don't use a traditional log directory structure
+		// Instead, we create a temp directory for note content files
+		const baseStorageDir = getStorageDirectory(workspaceFolder, document);
+		return path.join(baseStorageDir, 'temp');
+	} else {
+		const baseStorageDir = getStorageDirectory(workspaceFolder, document);
+		const relativePath = vscode.workspace.asRelativePath(document.uri, false);
+		return path.join(baseStorageDir, 'log', relativePath);
+	}
 }
