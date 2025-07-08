@@ -70,9 +70,17 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
                 };
             }));
             editor.setDecorations(aiGeneratedDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.AIGenerated).map(range => {
+                const aiType = {
+                    'inlineCompletion': ' • Using inline completion',
+                    'applyPatch': ' • Using the apply patch tool',
+                    'createFile': ' • Using the create file tool',
+                    'insertEdit': ' • Using the insert edit tool',
+                    'replaceString': ' • Using the replace string tool',
+                    '': ''
+                }[range.getAiType()] || '';
                 return {
                     range: range,
-                    hoverMessage: `AI Generated under ${range.getAuthor() ? (range.getAuthor() + "'s") : 'your'} control${range.getAiName() !== '' ? ` • ${range.getAiName()} (${range.getAiModel()})` : ''} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
+                    hoverMessage: `AI Generated under ${range.getAuthor() ? (range.getAuthor() + "'s") : 'your'} control${range.getAiName() !== '' ? ` • ${range.getAiName()} (${range.getAiModel()})` : ''}${aiType} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
                 };
             }));
             editor.setDecorations(undoRedoDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UndoRedo).map(range => {
