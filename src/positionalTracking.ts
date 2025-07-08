@@ -72,9 +72,31 @@ const getUpdatedRanges = (
    // Sort all changes in order so that the first one is the change that's the closest to
    // the end of the document, and the last one is the change that's the closest to
    // the begining of the document.
-   const sortedChanges = [...changes].sort((change1, change2) =>
+   let sortedChanges = [...changes].sort((change1, change2) =>
       change2.range.start.compareTo(change1.range.start)
    );
+
+   // If the last change is a zero position, combine all changes into one
+   if (
+      sortedChanges.length > 0 &&
+      sortedChanges[sortedChanges.length - 1].range.start.character === 0 &&
+      sortedChanges[sortedChanges.length - 1].range.start.line === 0 &&
+      sortedChanges[sortedChanges.length - 1].range.end.character === 0 &&
+      sortedChanges[sortedChanges.length - 1].range.end.line === 0
+   ) {
+      let newText = sortedChanges
+         .map(change => change.text)
+         .join('');
+      sortedChanges = [{
+         range: new vscode.Range(
+            new vscode.Position(0, 0),
+            new vscode.Position(0, 0),
+         ),
+         text: newText,
+         rangeOffset: 0,
+         rangeLength: 0
+      }];
+   }
 
    let onDeletion: OnDeletion | undefined = undefined;
    let onAddition: OnAddition | undefined = undefined;
