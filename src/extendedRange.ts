@@ -15,6 +15,7 @@ export class ExtendedRangeOptions {
 	aiName?: string;
 	aiModel?: string;
 	aiExplanation?: string;
+	aiType?: string;
 }
 
 export class ExtendedRange extends vscode.Range {
@@ -68,6 +69,10 @@ export class ExtendedRange extends vscode.Range {
 
 	getAiExplanation(): string {
 		return this.options.aiExplanation || '';
+	}
+
+	getAiType(): string {
+		return this.options.aiType || '';
 	}
 
 	setType(type: ExtendedRangeType): void {

@@ -11,6 +11,7 @@ export interface SerializedChange {
     aiName?: string;
     aiModel?: string;
     aiExplanation?: string;
+    aiType?: string;
 }
 
 export interface SerializedFileState {

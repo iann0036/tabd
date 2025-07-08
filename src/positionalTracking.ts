@@ -173,6 +173,7 @@ const getUpdatedRanges = (
                options.aiName = aiInfo._extensionName || 'unknown';
                options.aiModel = aiInfo._modelId || aiInfo.command.arguments[0].telemetry.properties.engineName || '';
                options.aiExplanation = aiInfo._explanation || '';
+               options.aiType = aiInfo._type || '';
             }
          } catch (error) { }
 

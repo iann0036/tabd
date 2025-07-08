@@ -407,6 +407,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 				options.aiName = change.aiName || "";
 				options.aiModel = change.aiModel || "";
 				options.aiExplanation = change.aiExplanation || "";
+				options.aiType = change.aiType || "";
 
 				return new ExtendedRange(
 					new vscode.Position(change.start.line, change.start.character),
@@ -459,6 +460,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 				options.aiName = change.aiName || "";
 				options.aiModel = change.aiModel || "";
 				options.aiExplanation = change.aiExplanation || "";
+				options.aiType = change.aiType || "";
 
 				return new ExtendedRange(
 					new vscode.Position(change.start.line, change.start.character),
