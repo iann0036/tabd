@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import { ExtendedRange, ExtendedRangeType, ExtendedRangeOptions } from './extendedRange';
-import * as fs from 'fs';
 import { execSync } from 'child_process';
+
+let mostRecentInternalCommand: any = {
+   value: {"_type": "initial"}
+};
 
 const getUpdatedPosition = (
    position: vscode.Position,
@@ -48,67 +51,32 @@ const getUpdatedPosition = (
    return new vscode.Position(newLine, newCharacter);
 };
 
-type OnDeletion = "remove" | "shrink";
-type OnAddition = "remove" | "extend" | "split";
-
-interface UpdateOptions {
-   onDeletion?: OnDeletion;
-   onAddition?: OnAddition;
-   debugConsole?: boolean;
-   outputChannel?: vscode.OutputChannel;
-}
-
 const getUpdatedRanges = (
    ranges: ExtendedRange[],
    pasteRanges: ExtendedRange[],
    changes: readonly vscode.TextDocumentContentChangeEvent[],
-   options: UpdateOptions,
    reason: (vscode.TextDocumentChangeReason | ExtendedRangeType.Paste | ExtendedRangeType.IDEPaste | undefined),
    document: vscode.TextDocument
 ): ExtendedRange[] => {
    let toUpdateRanges: (ExtendedRange | null)[] = [...ranges];
    let additionalRanges: ExtendedRange[] = [];
 
-   // Sort all changes in order so that the first one is the change that's the closest to
-   // the end of the document, and the last one is the change that's the closest to
-   // the begining of the document.
+   if (
+      changes.length > 1 &&
+      changes[changes.length - 1].range.end.line === 0 &&
+      changes[changes.length - 1].range.end.character === 0
+   ) {
+      changes = [{
+         range: changes[0].range,
+         rangeOffset: changes[0].rangeOffset,
+         rangeLength: changes[0].rangeLength,
+         text: changes.map(change => change.text).reverse().join(''),
+      }];
+   } // special case for start of document changes
+
    let sortedChanges = [...changes].sort((change1, change2) =>
       change2.range.start.compareTo(change1.range.start)
    );
-
-   // If the last change is a zero position, combine all changes into one
-   if (
-      sortedChanges.length > 0 &&
-      sortedChanges[sortedChanges.length - 1].range.start.character === 0 &&
-      sortedChanges[sortedChanges.length - 1].range.start.line === 0 &&
-      sortedChanges[sortedChanges.length - 1].range.end.character === 0 &&
-      sortedChanges[sortedChanges.length - 1].range.end.line === 0
-   ) {
-      let newText = sortedChanges
-         .map(change => change.text)
-         .join('');
-      sortedChanges = [{
-         range: new vscode.Range(
-            new vscode.Position(0, 0),
-            new vscode.Position(0, 0),
-         ),
-         text: newText,
-         rangeOffset: 0,
-         rangeLength: 0
-      }];
-   }
-
-   let onDeletion: OnDeletion | undefined = undefined;
-   let onAddition: OnAddition | undefined = undefined;
-   if (options) {
-      ({ onDeletion, onAddition } = options);
-   }
-   if (!onDeletion) {
-      onDeletion = 'shrink';
-   }
-   if (!onAddition) {
-      onAddition = 'extend';
-   }
 
    for (const change of sortedChanges) {
       // Add new ranges
@@ -154,10 +122,12 @@ const getUpdatedRanges = (
             isAI = true;
          }
 
+         let startPosition = change.range.start;
+         const endPosition = document.positionAt(document.offsetAt(change.range.start) + change.text.length);
+
          const options = new ExtendedRangeOptions();
          try {
-            const aiData = fs.readFileSync(`${require('os').homedir()}/.tabd/latest_ai.json`, 'utf8');
-            const aiInfo = JSON.parse(aiData);
+            const aiInfo = mostRecentInternalCommand.value;
 
             if (!aiInfo.range) {
                aiInfo.range = [change.range.start, change.range.end]; // TODO: should be whole document range
@@ -174,10 +144,20 @@ const getUpdatedRanges = (
                options.aiModel = aiInfo._modelId || aiInfo.command.arguments[0].telemetry.properties.engineName || '';
                options.aiExplanation = aiInfo._explanation || '';
                options.aiType = aiInfo._type || '';
+               if (aiInfo.oldText) {
+                  // Get first instance of a differing character between oldText and insertText
+                  let differingIndex = 0;
+                  while (differingIndex < aiInfo.oldText.length && differingIndex < change.text.length && aiInfo.oldText[differingIndex] === change.text[differingIndex]) {
+                     differingIndex++;
+                  }
+
+                  startPosition = document.positionAt(document.offsetAt(change.range.start) + differingIndex - aiInfo.insertText.indexOf(change.text));
+               }
+               isAI = true;
             }
          } catch (error) { }
 
-         additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIGenerated, Date.now(), '', options));
+         additionalRanges.push(new ExtendedRange(startPosition, endPosition, ExtendedRangeType.AIGenerated, Date.now(), '', options));
       }
 
       for (let i = 0; i < toUpdateRanges.length; i++) {
@@ -211,9 +191,7 @@ const getUpdatedRanges = (
 
                   additionalRanges.push(new ExtendedRange(newRangeStart, newRangeEnd, currentRange.getType(), currentRange.getCreationTimestamp(), currentRange.getAuthor(), currentRange.getOptions()));
                   toUpdateRanges[i] = null;
-               } else if (onDeletion === 'remove') {
-                  toUpdateRanges[i] = null;
-               } else if (onDeletion === 'shrink') {
+               } else {
                   let newRangeStart = currentRange.start;
                   let newRangeEnd = currentRange.end;
 
@@ -246,16 +224,12 @@ const getUpdatedRanges = (
             !change.range.start.isEqual(updatedRange.end)
          ) {
             if (change.text) {
-               if (onAddition === 'remove') {
-                  toUpdateRanges[i] = null;
-               } else if (onAddition === 'split') {
-                  toUpdateRanges.splice(
-                     i + 1,
-                     0,
-                     new ExtendedRange(change.range.start, updatedRange.end, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getOptions())
-                  );
-                  toUpdateRanges[i] = new ExtendedRange(updatedRange.start, change.range.start, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getOptions());
-               }
+               toUpdateRanges.splice(
+                  i + 1,
+                  0,
+                  new ExtendedRange(change.range.start, updatedRange.end, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getOptions())
+               );
+               toUpdateRanges[i] = new ExtendedRange(updatedRange.start, change.range.start, updatedRange.getType(), updatedRange.getCreationTimestamp(), updatedRange.getAuthor(), updatedRange.getOptions());
             }
          }
 
@@ -377,4 +351,4 @@ function resolveIDEPaste(workspacePath: string, relativePath: string): { url: st
    return { url: gitUrl, title: relativePath + (branchName === 'main' || branchName === 'master' ? '' : ` (on branch ${branchName})`) };
 }
 
-export { getUpdatedRanges, getUpdatedPosition };
+export { getUpdatedRanges, getUpdatedPosition, mostRecentInternalCommand };

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getUpdatedRanges } from "./positionalTracking";
+import { getUpdatedRanges, mostRecentInternalCommand } from "./positionalTracking";
 import { Mutex } from 'async-mutex';
 import { fsPath, uniqueFileName, shouldProcessFile, getLogDirectory, getStorageDirectory } from './utils';
 import { ExtendedRange, ExtendedRangeOptions, ExtendedRangeType, mergeRangesSequentially, mergeUserEdits } from './extendedRange';
@@ -77,10 +77,6 @@ export function activate(context: vscode.ExtensionContext) {
 						fileState.changes,
 						fileState.pasteRanges,
 						e.contentChanges,
-						{
-							onDeletion: 'shrink',
-							onAddition: 'split',
-						},
 						e.reason,
 						e.document,
 					);
@@ -324,6 +320,18 @@ export function activate(context: vscode.ExtensionContext) {
 			} else {
 				disableClipboardTracking();
 			}
+		}),
+
+		// Register the command to gather events from other extensions
+		vscode.commands.registerCommand('tabd._internal', async (args) => {
+			// Check if tracking is disabled
+			const config = vscode.workspace.getConfiguration('tabd');
+			const disabled = config.get<boolean>('disabled', false);
+			if (disabled) {
+				return;
+			}
+			
+			mostRecentInternalCommand.value = JSON.parse(String(args));
 		}),
 	);
 	
