@@ -122,7 +122,7 @@ const getUpdatedRanges = (
             isAI = true;
          }
 
-         let startPosition = change.range.start;
+         let startPosition = change.range.end;
          const endPosition = document.positionAt(document.offsetAt(change.range.start) + change.text.length);
 
          const options = new ExtendedRangeOptions();
