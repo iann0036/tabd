@@ -144,7 +144,6 @@ suite('Positional Tracking Test Suite', () => {
 				existingRanges,
 				pasteRanges,
 				changes,
-				{ onDeletion: 'shrink', onAddition: 'split' },
 				undefined,
 				mockDoc
 			);
@@ -168,7 +167,6 @@ suite('Positional Tracking Test Suite', () => {
 				existingRanges,
 				pasteRanges,
 				changes,
-				{ onDeletion: 'shrink', onAddition: 'split' },
 				undefined,
 				mockDoc
 			);
@@ -199,7 +197,6 @@ suite('Positional Tracking Test Suite', () => {
 				existingRanges,
 				pasteRanges,
 				changes,
-				{ onDeletion: 'shrink', onAddition: 'split' },
 				ExtendedRangeType.Paste,
 				mockDoc
 			);
@@ -223,7 +220,6 @@ suite('Positional Tracking Test Suite', () => {
 				existingRanges,
 				pasteRanges,
 				changes,
-				{ onDeletion: 'shrink', onAddition: 'split' },
 				vscode.TextDocumentChangeReason.Undo,
 				mockDoc
 			);
@@ -254,7 +250,6 @@ suite('Positional Tracking Test Suite', () => {
 				existingRanges,
 				pasteRanges,
 				changes,
-				{ onDeletion: 'shrink', onAddition: 'split' },
 				undefined,
 				mockDoc
 			);
@@ -295,7 +290,6 @@ suite('Positional Tracking Test Suite', () => {
 				existingRanges,
 				pasteRanges,
 				changes,
-				{ onDeletion: 'shrink', onAddition: 'split' },
 				undefined,
 				mockDoc
 			);
@@ -310,7 +304,6 @@ suite('Positional Tracking Test Suite', () => {
 				[],
 				[],
 				[],
-				{ onDeletion: 'shrink', onAddition: 'split' },
 				undefined,
 				mockDoc
 			);
