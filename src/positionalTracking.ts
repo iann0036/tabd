@@ -122,7 +122,7 @@ const getUpdatedRanges = (
                 isAI = true;
             }
 
-            let startPosition = change.range.end;
+            let startPosition = change.range.start;
             const endPosition = document.positionAt(document.offsetAt(change.range.start) + change.text.length);
 
             const options = new ExtendedRangeOptions();
@@ -133,18 +133,27 @@ const getUpdatedRanges = (
                     aiInfo.range = [change.range.start, change.range.end]; // TODO: should be whole document range
                 }
 
-                if (aiInfo.insertText.includes(change.text) &&
-                    change.range.start.line === aiInfo.range[0].line &&
-                    change.range.start.character === aiInfo.range[0].character &&
-                    change.range.end.line === aiInfo.range[1].line &&
-                    change.range.end.character === aiInfo.range[1].character &&
-                    aiInfo._timestamp > Date.now() - 2000
+                console.debug("startPosition", startPosition, "endPosition", endPosition, "aiInfo", aiInfo, "change.range", change.range, "change.text", change.text, "textIncludes", aiInfo.insertText.trim().includes(change.text.trim()));
+
+                if (aiInfo.insertText.trim().includes(change.text.trim()) &&
+                    (
+                        (
+                            change.range.start.line === aiInfo.range[0].line &&
+                            change.range.start.character === aiInfo.range[0].character &&
+                            change.range.end.line === aiInfo.range[1].line &&
+                            change.range.end.character === aiInfo.range[1].character &&
+                            aiInfo._timestamp > Date.now() - 2000
+                        ) || (
+                            aiInfo._type === 'insertEdit' &&
+                            aiInfo._timestamp > Date.now() - 5000
+                        )
+                    )
                 ) {
                     options.aiName = aiInfo._extensionName || 'unknown';
                     options.aiModel = aiInfo._modelId || aiInfo.command.arguments[0].telemetry.properties.engineName || '';
                     options.aiExplanation = aiInfo._explanation || '';
                     options.aiType = aiInfo._type || '';
-                    if (aiInfo.oldText) {
+                    /*if (aiInfo.oldText) {
                         // Get first instance of a differing character between oldText and insertText
                         let differingIndex = 0;
                         while (differingIndex < aiInfo.oldText.length && differingIndex < change.text.length && aiInfo.oldText[differingIndex] === change.text[differingIndex]) {
@@ -152,10 +161,13 @@ const getUpdatedRanges = (
                         }
 
                         startPosition = document.positionAt(document.offsetAt(change.range.start) + differingIndex - aiInfo.insertText.indexOf(change.text));
-                    }
+                    }*/
                     isAI = true;
+                    console.debug("AI Range detected", startPosition, endPosition, aiInfo);
                 }
-            } catch (error) { }
+            } catch (error) { 
+                console.error("Error processing AI range:", error);
+            }
 
             additionalRanges.push(new ExtendedRange(startPosition, endPosition, ExtendedRangeType.AIGenerated, Date.now(), '', options));
         }
