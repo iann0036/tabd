@@ -330,8 +330,29 @@ export function activate(context: vscode.ExtensionContext) {
 			if (disabled) {
 				return;
 			}
+
+			const obj = JSON.parse(String(args));
+
+			if (obj._type === 'postInsertEdit') {
+				editLock.runExclusive(async () => {
+					let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
+					let updatedRanges = getUpdatedRanges(
+						fileState.changes,
+						fileState.pasteRanges,
+						mostRecentInternalCommand.changes,
+						ExtendedRangeType.AIGenerated,
+						mostRecentInternalCommand.document,
+					);
+
+					fileState.changes = updatedRanges;
+
+					triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
+				});
+
+				return;
+			}
 			
-			mostRecentInternalCommand.value = JSON.parse(String(args));
+			mostRecentInternalCommand.value = obj;
 		}),
 	);
 	

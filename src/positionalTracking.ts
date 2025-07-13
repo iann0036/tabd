@@ -3,7 +3,9 @@ import { ExtendedRange, ExtendedRangeType, ExtendedRangeOptions } from './extend
 import { execSync } from 'child_process';
 
 let mostRecentInternalCommand: any = {
-    value: { "_type": "initial" }
+    value: { "_type": "initial" },
+    document: null,
+    changes: [],
 };
 
 const getUpdatedPosition = (
@@ -55,7 +57,7 @@ const getUpdatedRanges = (
     ranges: ExtendedRange[],
     pasteRanges: ExtendedRange[],
     changes: readonly vscode.TextDocumentContentChangeEvent[],
-    reason: (vscode.TextDocumentChangeReason | ExtendedRangeType.Paste | ExtendedRangeType.IDEPaste | undefined),
+    reason: (vscode.TextDocumentChangeReason | ExtendedRangeType.Paste | ExtendedRangeType.IDEPaste | ExtendedRangeType.AIGenerated | undefined),
     document: vscode.TextDocument
 ): ExtendedRange[] => {
     let toUpdateRanges: (ExtendedRange | null)[] = [...ranges];
@@ -113,15 +115,27 @@ const getUpdatedRanges = (
 
 
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), reason, Date.now(), '', options));
+        } else if (reason === ExtendedRangeType.AIGenerated) { // assume it's postInsertEdit
+            const options = new ExtendedRangeOptions();
+
+            const aiInfo = mostRecentInternalCommand.value;
+            options.aiName = aiInfo._extensionName || 'unknown';
+            options.aiModel = aiInfo._modelId || aiInfo.command.arguments[0].telemetry.properties.engineName || '';
+            options.aiExplanation = aiInfo._explanation || '';
+            options.aiType = aiInfo._type || '';
+
+            additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIGenerated, Date.now(), '', options));
+
+            isAI = true;
+
+            mostRecentInternalCommand.value = { "_type": "initial" };
+            mostRecentInternalCommand.document = null;
+            mostRecentInternalCommand.changes = [];
         } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
         } else if (change.text.trim().length <= 1) {
-            additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UserEdit, Date.now()));
+            additionalRanges.push(new ExtendedRange(change.range.start, change.range.end, ExtendedRangeType.UserEdit, Date.now()));
         } else {
-            if (!change.range.start.isEqual(change.range.end)) { // TODO: and if the delta text matches
-                isAI = true;
-            }
-
             let startPosition = change.range.start;
             const endPosition = document.positionAt(document.offsetAt(change.range.start) + change.text.length);
 
@@ -129,11 +143,64 @@ const getUpdatedRanges = (
             try {
                 const aiInfo = mostRecentInternalCommand.value;
 
+                if (aiInfo._type === 'insertEdit') {
+                    mostRecentInternalCommand.document = document;
+
+                    aiInfo.insertText = aiInfo.insertText.replaceAll("// ...existing code...", "").trim();
+
+                    // calculate new range offsets
+                    // TODO: could be more efficient
+                    let useDefaultStartOffset = true;
+                    let useDefaultEndOffset = true;
+                    let startOffset = 0;
+                    let endOffset = aiInfo.insertText.length;
+
+                    while (aiInfo.oldText.indexOf(aiInfo.insertText.substring(0, startOffset + 1)) !== -1) {
+                        startOffset++;
+                        useDefaultStartOffset = false;
+                        if (startOffset >= aiInfo.insertText.length) {
+                            useDefaultStartOffset = true;
+                            //console.error("AI insert text appears to have not changed, per startOffset");
+                            break;
+                        }
+                    }
+                    if (useDefaultStartOffset) {
+                        startOffset = 0;
+                    }
+
+                    const offsetOldText = aiInfo.oldText.substring(aiInfo.oldText.indexOf(aiInfo.insertText.substring(0, startOffset)) + startOffset);
+                    while (offsetOldText.lastIndexOf(aiInfo.insertText.substring(endOffset - 1), startOffset) !== -1) {
+                        endOffset--;
+                        useDefaultEndOffset = false;
+
+                        if (endOffset <= 0) {
+                            useDefaultEndOffset = true;
+                            //console.error("AI insert text appears to have not changed, per endOffset");
+                            break;
+                        }
+                    }
+                    if (useDefaultEndOffset) {
+                        endOffset = aiInfo.insertText.length;
+                    }
+
+                    mostRecentInternalCommand.changes = [
+                        {
+                            range: new vscode.Range( // calculated to not delete anything (kind of)
+                                document.positionAt(aiInfo.oldText.indexOf(aiInfo.insertText.substring(0, startOffset)) + startOffset),
+                                document.positionAt(aiInfo.oldText.indexOf(aiInfo.insertText.substring(0, startOffset)) + startOffset),
+                            ),
+                            rangeOffset: 0, // unused
+                            rangeLength: 0, // unused
+                            text: aiInfo.insertText.substring(startOffset, endOffset),
+                        }
+                    ];
+
+                    continue;
+                }
+
                 if (!aiInfo.range) {
                     aiInfo.range = [change.range.start, change.range.end]; // TODO: should be whole document range
                 }
-
-                console.debug("startPosition", startPosition, "endPosition", endPosition, "aiInfo", aiInfo, "change.range", change.range, "change.text", change.text, "textIncludes", aiInfo.insertText.trim().includes(change.text.trim()));
 
                 if (aiInfo.insertText.trim().includes(change.text.trim()) &&
                     (
@@ -163,13 +230,16 @@ const getUpdatedRanges = (
                         startPosition = document.positionAt(document.offsetAt(change.range.start) + differingIndex - aiInfo.insertText.indexOf(change.text));
                     }*/
                     isAI = true;
-                    console.debug("AI Range detected", startPosition, endPosition, aiInfo);
                 }
             } catch (error) { 
                 console.error("Error processing AI range:", error);
             }
 
-            additionalRanges.push(new ExtendedRange(startPosition, endPosition, ExtendedRangeType.AIGenerated, Date.now(), '', options));
+            if (isAI) {
+                additionalRanges.push(new ExtendedRange(startPosition, endPosition, ExtendedRangeType.AIGenerated, Date.now(), '', options));
+            } else {
+                //additionalRanges.push(new ExtendedRange(startPosition, endPosition, ExtendedRangeType.Unknown, Date.now(), '', options));
+            }
         }
 
         for (let i = 0; i < toUpdateRanges.length; i++) {
