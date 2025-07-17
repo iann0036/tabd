@@ -333,6 +333,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 			const obj = JSON.parse(String(args));
 
+			let d = await vscode.workspace.openTextDocument(vscode.Uri.file(obj.filePath));
+
 			if (obj._type === 'postInsertEdit') {
 				editLock.runExclusive(async () => {
 					let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
@@ -348,11 +350,40 @@ export function activate(context: vscode.ExtensionContext) {
 
 					triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
 				});
-
 				return;
 			}
 			
 			mostRecentInternalCommand.value = obj;
+			
+			if (obj._type === 'createFile') {
+				editLock.runExclusive(async () => {
+					let fileState = globalFileState[fsPath(d.uri)];
+					let updatedRanges: ExtendedRange[];
+
+					if (!fileState) {
+						fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
+					}
+					
+					updatedRanges = getUpdatedRanges(
+						fileState.changes,
+						fileState.pasteRanges,
+						[
+							{
+								range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0)),
+								rangeOffset: 0, // unused
+								rangeLength: 0, // unused
+								text: obj.insertText,
+							}
+						],
+						undefined,
+						d,
+					);
+
+					fileState.changes = updatedRanges;
+
+					triggerDecorationUpdate(d, updatedRanges);
+				});
+			}
 		}),
 	);
 	

@@ -115,7 +115,7 @@ const getUpdatedRanges = (
 
 
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), reason, Date.now(), '', options));
-        } else if (reason === ExtendedRangeType.AIGenerated) { // assume it's postInsertEdit
+        } else if (reason === ExtendedRangeType.AIGenerated) { // e.g. postInsertEdit
             const options = new ExtendedRangeOptions();
 
             const aiInfo = mostRecentInternalCommand.value;
