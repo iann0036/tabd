@@ -232,45 +232,54 @@ suite('Utils Test Suite', () => {
 	});
 
 	suite('Checksum Tests', () => {
-		test('should generate consistent checksums for same data', () => {
-			const data = '{"version":1,"changes":[]}';
-			const checksum1 = generateDataChecksum(data);
-			const checksum2 = generateDataChecksum(data);
+		test('should generate consistent checksums for same file content', () => {
+			const fileContent = 'console.log("Hello, world!");';
+			const checksum1 = generateDataChecksum(fileContent);
+			const checksum2 = generateDataChecksum(fileContent);
 			
 			assert.strictEqual(checksum1, checksum2);
 			assert.strictEqual(typeof checksum1, 'string');
 			assert.strictEqual(checksum1.length, 64); // SHA-256 produces 64 character hex string
 		});
 
-		test('should generate different checksums for different data', () => {
-			const data1 = '{"version":1,"changes":[]}';
-			const data2 = '{"version":1,"changes":[{"test":true}]}';
-			const checksum1 = generateDataChecksum(data1);
-			const checksum2 = generateDataChecksum(data2);
+		test('should generate different checksums for different file content', () => {
+			const content1 = 'console.log("Hello, world!");';
+			const content2 = 'console.log("Hello, universe!");';
+			const checksum1 = generateDataChecksum(content1);
+			const checksum2 = generateDataChecksum(content2);
 			
 			assert.notStrictEqual(checksum1, checksum2);
 		});
 
-		test('should verify valid checksums', () => {
-			const data = '{"version":1,"changes":["test"]}';
-			const checksum = generateDataChecksum(data);
+		test('should verify valid file content checksums', () => {
+			const fileContent = 'function test() { return true; }';
+			const checksum = generateDataChecksum(fileContent);
 			
-			assert.strictEqual(verifyDataChecksum(data, checksum), true);
+			assert.strictEqual(verifyDataChecksum(fileContent, checksum), true);
 		});
 
-		test('should reject invalid checksums', () => {
-			const data = '{"version":1,"changes":["test"]}';
+		test('should reject invalid file content checksums', () => {
+			const fileContent = 'function test() { return true; }';
 			const invalidChecksum = 'invalid_checksum';
 			
-			assert.strictEqual(verifyDataChecksum(data, invalidChecksum), false);
+			assert.strictEqual(verifyDataChecksum(fileContent, invalidChecksum), false);
 		});
 
-		test('should detect tampered data', () => {
-			const originalData = '{"version":1,"changes":[]}';
-			const tamperedData = '{"version":1,"changes":["malicious"]}';
-			const originalChecksum = generateDataChecksum(originalData);
+		test('should detect modified file content', () => {
+			const originalContent = 'let x = 1;';
+			const modifiedContent = 'let x = 2;';
+			const originalChecksum = generateDataChecksum(originalContent);
 			
-			assert.strictEqual(verifyDataChecksum(tamperedData, originalChecksum), false);
+			assert.strictEqual(verifyDataChecksum(modifiedContent, originalChecksum), false);
+		});
+
+		test('should handle empty file content', () => {
+			const emptyContent = '';
+			const checksum = generateDataChecksum(emptyContent);
+			
+			assert.strictEqual(typeof checksum, 'string');
+			assert.strictEqual(checksum.length, 64);
+			assert.strictEqual(verifyDataChecksum(emptyContent, checksum), true);
 		});
 	});
 });

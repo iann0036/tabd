@@ -300,7 +300,7 @@ suite('Types and Integration Test Suite', () => {
 	});
 
 	suite('Checksum Integration Tests', () => {
-		test('should handle SerializedFileState with checksum', () => {
+		test('should handle SerializedFileState with file content checksum', () => {
 			const fileStateWithChecksum: SerializedFileState = {
 				version: 1,
 				changes: [
@@ -312,7 +312,7 @@ suite('Types and Integration Test Suite', () => {
 						author: 'test-user'
 					}
 				],
-				checksum: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+				checksum: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' // SHA-256 of file content
 			};
 
 			assert.strictEqual(fileStateWithChecksum.version, 1);
@@ -321,7 +321,7 @@ suite('Types and Integration Test Suite', () => {
 			assert.strictEqual(typeof fileStateWithChecksum.checksum, 'string');
 		});
 
-		test('should handle SerializedFileState without checksum', () => {
+		test('should handle SerializedFileState without checksum for backward compatibility', () => {
 			const fileStateWithoutChecksum: SerializedFileState = {
 				version: 1,
 				changes: []
@@ -332,10 +332,11 @@ suite('Types and Integration Test Suite', () => {
 			assert.strictEqual(fileStateWithoutChecksum.checksum, undefined);
 		});
 
-		test('should allow checksum to be optional', () => {
+		test('should allow checksum to be optional for legacy data', () => {
 			// This test verifies that checksum is truly optional in the interface
+			// to maintain backward compatibility with existing saved data
 			const minimalState: SerializedFileState = { version: 1, changes: [] };
-			const stateWithChecksum: SerializedFileState = { version: 1, changes: [], checksum: 'test' };
+			const stateWithChecksum: SerializedFileState = { version: 1, changes: [], checksum: 'file_content_checksum' };
 			
 			assert.ok(minimalState);
 			assert.ok(stateWithChecksum);

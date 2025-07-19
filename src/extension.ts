@@ -219,9 +219,9 @@ export function activate(context: vscode.ExtensionContext) {
 							})),
 					};
 
-					// Generate checksum for the data
-					const dataString = JSON.stringify({ version: dataToSave.version, changes: dataToSave.changes });
-					dataToSave.checksum = generateDataChecksum(dataString);
+					// Generate checksum for the actual file content
+					const fileContent = document.getText();
+					dataToSave.checksum = generateDataChecksum(fileContent);
 
 					// Handle gitnotes storage
 					if (storageType === 'experimental') {
@@ -747,9 +747,10 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 
 			// Verify checksum if present
 			if (fileState.checksum) {
-				const dataString = JSON.stringify({ version: fileState.version, changes: fileState.changes });
-				if (!verifyDataChecksum(dataString, fileState.checksum)) {
-					console.warn(`Checksum verification failed for Git notes data. Skipping corrupted data.`);
+				const currentFileContent = document.getText();
+				const currentChecksum = generateDataChecksum(currentFileContent);
+				if (currentChecksum !== fileState.checksum) {
+					console.warn(`File content has changed since Git notes data was saved. Skipping outdated data.`);
 					continue;
 				}
 			}
@@ -810,9 +811,10 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 
 			// Verify checksum if present
 			if (fileState.checksum) {
-				const dataString = JSON.stringify({ version: fileState.version, changes: fileState.changes });
-				if (!verifyDataChecksum(dataString, fileState.checksum)) {
-					console.warn(`Checksum verification failed for ${fileChangeRecordPath}. Skipping corrupted data.`);
+				const currentFileContent = document.getText();
+				const currentChecksum = generateDataChecksum(currentFileContent);
+				if (currentChecksum !== fileState.checksum) {
+					console.warn(`File content has changed since data was saved for ${fileChangeRecordPath}. Skipping outdated data.`);
 					continue;
 				}
 			}

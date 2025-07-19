@@ -17,6 +17,7 @@ export interface SerializedChange {
 export interface SerializedFileState {
     version: number;
     changes: SerializedChange[];
+    /** SHA-256 checksum of the workspace file content when this data was saved */
     checksum?: string;
 }
 
