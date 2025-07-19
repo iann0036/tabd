@@ -4,7 +4,7 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import { getUpdatedRanges, mostRecentInternalCommand } from "./positionalTracking";
 import { Mutex } from 'async-mutex';
-import { fsPath, uniqueFileName, shouldProcessFile, getLogDirectory, getStorageDirectory } from './utils';
+import { fsPath, uniqueFileName, shouldProcessFile, getLogDirectory, getStorageDirectory, generateDataChecksum, verifyDataChecksum } from './utils';
 import { ExtendedRange, ExtendedRangeOptions, ExtendedRangeType, mergeRangesSequentially, mergeUserEdits } from './extendedRange';
 import { PasteEditProvider } from './pasteEditProvider';
 import { triggerDecorationUpdate } from './decorators';
@@ -219,6 +219,10 @@ export function activate(context: vscode.ExtensionContext) {
 							})),
 					};
 
+					// Generate checksum for the data
+					const dataString = JSON.stringify({ version: dataToSave.version, changes: dataToSave.changes });
+					dataToSave.checksum = generateDataChecksum(dataString);
+
 					// Handle gitnotes storage
 					if (storageType === 'experimental') {
 						// Check if Git is initialized at the workspace root
@@ -275,7 +279,7 @@ export function activate(context: vscode.ExtensionContext) {
 						throw new Error(`File change record already exists at ${fileChangeRecordPath}. This should not happen!`);
 					}
 					
-					// TODO: Add a whole file hash to ensure the file state is valid
+					// Write the file state to a JSON file with checksum
 					fs.writeFileSync(fileChangeRecordPath, JSON.stringify(dataToSave));
 
 					// Update the global file state
@@ -740,6 +744,15 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 			if (fileState.version !== 1) {
 				continue; // Unsupported version
 			}
+
+			// Verify checksum if present
+			if (fileState.checksum) {
+				const dataString = JSON.stringify({ version: fileState.version, changes: fileState.changes });
+				if (!verifyDataChecksum(dataString, fileState.checksum)) {
+					console.warn(`Checksum verification failed for Git notes data. Skipping corrupted data.`);
+					continue;
+				}
+			}
 			
 			const newChanges = fileState.changes.map(change => {
 				const options = new ExtendedRangeOptions();
@@ -789,9 +802,19 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 
 	for (const fileChangeRecordPath of fileChangeRecords) {
 		try {
-			const fileState: SerializedFileState = JSON.parse(fs.readFileSync(fileChangeRecordPath, 'utf8'));
+			const fileContent = fs.readFileSync(fileChangeRecordPath, 'utf8');
+			const fileState: SerializedFileState = JSON.parse(fileContent);
 			if (fileState.version !== 1) {
 				continue; // Unsupported version
+			}
+
+			// Verify checksum if present
+			if (fileState.checksum) {
+				const dataString = JSON.stringify({ version: fileState.version, changes: fileState.changes });
+				if (!verifyDataChecksum(dataString, fileState.checksum)) {
+					console.warn(`Checksum verification failed for ${fileChangeRecordPath}. Skipping corrupted data.`);
+					continue;
+				}
 			}
 			
 			const newChanges = fileState.changes.map(change => {

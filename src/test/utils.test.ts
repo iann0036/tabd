@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
-import { shouldProcessFile, fsPath, uniqueFileName, getStorageDirectory, getLogDirectory } from '../utils';
+import { shouldProcessFile, fsPath, uniqueFileName, getStorageDirectory, getLogDirectory, generateDataChecksum, verifyDataChecksum } from '../utils';
 
 suite('Utils Test Suite', () => {
 	
@@ -228,6 +228,49 @@ suite('Utils Test Suite', () => {
 			} finally {
 				vscode.workspace.getConfiguration = origGet;
 			}
+		});
+	});
+
+	suite('Checksum Tests', () => {
+		test('should generate consistent checksums for same data', () => {
+			const data = '{"version":1,"changes":[]}';
+			const checksum1 = generateDataChecksum(data);
+			const checksum2 = generateDataChecksum(data);
+			
+			assert.strictEqual(checksum1, checksum2);
+			assert.strictEqual(typeof checksum1, 'string');
+			assert.strictEqual(checksum1.length, 64); // SHA-256 produces 64 character hex string
+		});
+
+		test('should generate different checksums for different data', () => {
+			const data1 = '{"version":1,"changes":[]}';
+			const data2 = '{"version":1,"changes":[{"test":true}]}';
+			const checksum1 = generateDataChecksum(data1);
+			const checksum2 = generateDataChecksum(data2);
+			
+			assert.notStrictEqual(checksum1, checksum2);
+		});
+
+		test('should verify valid checksums', () => {
+			const data = '{"version":1,"changes":["test"]}';
+			const checksum = generateDataChecksum(data);
+			
+			assert.strictEqual(verifyDataChecksum(data, checksum), true);
+		});
+
+		test('should reject invalid checksums', () => {
+			const data = '{"version":1,"changes":["test"]}';
+			const invalidChecksum = 'invalid_checksum';
+			
+			assert.strictEqual(verifyDataChecksum(data, invalidChecksum), false);
+		});
+
+		test('should detect tampered data', () => {
+			const originalData = '{"version":1,"changes":[]}';
+			const tamperedData = '{"version":1,"changes":["malicious"]}';
+			const originalChecksum = generateDataChecksum(originalData);
+			
+			assert.strictEqual(verifyDataChecksum(tamperedData, originalChecksum), false);
 		});
 	});
 });

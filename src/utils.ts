@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import * as os from "os";
+import { createHash } from 'crypto';
 
 export const isWin = process.platform.startsWith("win");
 
@@ -136,4 +137,13 @@ export function getLogDirectory(workspaceFolder: vscode.WorkspaceFolder, documen
 		const relativePath = vscode.workspace.asRelativePath(document.uri, false);
 		return path.join(baseStorageDir, 'log', relativePath);
 	}
+}
+
+export function generateDataChecksum(data: string): string {
+	return createHash('sha256').update(data).digest('hex');
+}
+
+export function verifyDataChecksum(data: string, expectedChecksum: string): boolean {
+	const actualChecksum = generateDataChecksum(data);
+	return actualChecksum === expectedChecksum;
 }

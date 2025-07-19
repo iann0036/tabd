@@ -298,4 +298,47 @@ suite('Types and Integration Test Suite', () => {
 			assert.strictEqual(change.end.character, 9999);
 		});
 	});
+
+	suite('Checksum Integration Tests', () => {
+		test('should handle SerializedFileState with checksum', () => {
+			const fileStateWithChecksum: SerializedFileState = {
+				version: 1,
+				changes: [
+					{
+						start: { line: 0, character: 0 },
+						end: { line: 0, character: 10 },
+						type: ExtendedRangeType.UserEdit,
+						creationTimestamp: Date.now(),
+						author: 'test-user'
+					}
+				],
+				checksum: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+			};
+
+			assert.strictEqual(fileStateWithChecksum.version, 1);
+			assert.strictEqual(fileStateWithChecksum.changes.length, 1);
+			assert.strictEqual(fileStateWithChecksum.checksum, 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890');
+			assert.strictEqual(typeof fileStateWithChecksum.checksum, 'string');
+		});
+
+		test('should handle SerializedFileState without checksum', () => {
+			const fileStateWithoutChecksum: SerializedFileState = {
+				version: 1,
+				changes: []
+			};
+
+			assert.strictEqual(fileStateWithoutChecksum.version, 1);
+			assert.strictEqual(fileStateWithoutChecksum.changes.length, 0);
+			assert.strictEqual(fileStateWithoutChecksum.checksum, undefined);
+		});
+
+		test('should allow checksum to be optional', () => {
+			// This test verifies that checksum is truly optional in the interface
+			const minimalState: SerializedFileState = { version: 1, changes: [] };
+			const stateWithChecksum: SerializedFileState = { version: 1, changes: [], checksum: 'test' };
+			
+			assert.ok(minimalState);
+			assert.ok(stateWithChecksum);
+		});
+	});
 });

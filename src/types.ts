@@ -17,6 +17,7 @@ export interface SerializedChange {
 export interface SerializedFileState {
     version: number;
     changes: SerializedChange[];
+    checksum?: string;
 }
 
 export interface FileState {
