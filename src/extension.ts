@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { getUpdatedRanges, mostRecentInternalCommand } from "./positionalTracking";
 import { Mutex } from 'async-mutex';
 import { fsPath, uniqueFileName, shouldProcessFile, getLogDirectory, getStorageDirectory } from './utils';
@@ -315,6 +316,84 @@ export function activate(context: vscode.ExtensionContext) {
 			await config.update('disabled', !currentValue, vscode.ConfigurationTarget.Global);
 		}),
 
+		// Register the command to clear data for the current file
+		vscode.commands.registerCommand('tabd.clearDataFile', async () => {
+			const activeEditor = vscode.window.activeTextEditor;
+			if (!activeEditor || activeEditor.document.uri.scheme !== 'file') {
+				vscode.window.showWarningMessage('No active file editor found.');
+				return;
+			}
+
+			const document = activeEditor.document;
+			const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+			if (!workspaceFolder) {
+				vscode.window.showWarningMessage('File is not part of a workspace.');
+				return;
+			}
+
+			const result = await vscode.window.showWarningMessage(
+				`Are you sure you want to clear all Tab'd data for "${path.basename(document.uri.fsPath)}"? This action cannot be undone.`,
+				{ modal: true },
+				'Clear Data'
+			);
+
+			if (result === 'Clear Data') {
+				try {
+					await clearFileData(workspaceFolder, document);
+					
+					// Clear from memory
+					const filePath = fsPath(document.uri);
+					if (globalFileState[filePath]) {
+						globalFileState[filePath] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
+					}
+					
+					// Update decorations to reflect cleared state
+					triggerDecorationUpdate(document, []);
+					
+					vscode.window.showInformationMessage(`Tab'd data cleared for "${path.basename(document.uri.fsPath)}".`);
+				} catch (error) {
+					console.error('Failed to clear file data:', error);
+					vscode.window.showErrorMessage(`Failed to clear Tab'd data: ${error instanceof Error ? error.message : String(error)}`);
+				}
+			}
+		}),
+
+		// Register the command to clear data for the current workspace or repository
+		vscode.commands.registerCommand('tabd.clearDataWorkspace', async () => {
+			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+			if (!workspaceFolder) {
+				vscode.window.showWarningMessage('No workspace folder found.');
+				return;
+			}
+
+			const result = await vscode.window.showWarningMessage(
+				`Are you sure you want to clear all Tab'd data for the entire workspace "${workspaceFolder.name}"? This action cannot be undone.`,
+				{ modal: true },
+				'Clear All Data'
+			);
+
+			if (result === 'Clear All Data') {
+				try {
+					await clearWorkspaceData(workspaceFolder);
+					
+					// Clear from memory
+					globalFileState = {};
+					
+					// Update decorations for all visible editors
+					for (const editor of vscode.window.visibleTextEditors) {
+						if (editor.document.uri.scheme === 'file' && shouldProcessFile(editor.document.uri)) {
+							triggerDecorationUpdate(editor.document, []);
+						}
+					}
+					
+					vscode.window.showInformationMessage(`All Tab'd data cleared for workspace "${workspaceFolder.name}".`);
+				} catch (error) {
+					console.error('Failed to clear workspace data:', error);
+					vscode.window.showErrorMessage(`Failed to clear workspace data: ${error instanceof Error ? error.message : String(error)}`);
+				}
+			}
+		}),
+
 		// Register listener for window state changes
 		vscode.window.onDidChangeWindowState(windowState => {
 			if (windowState.focused && windowState.active) {
@@ -406,6 +485,206 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	enableClipboardTracking();
+}
+
+async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument): Promise<void> {
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
+
+	if (storageType === 'experimental') {
+		// Clear Git notes for this file
+		try {
+			const namespace = getGitNotesNamespace(workspaceFolder, document);
+			
+			// Get all commits with notes in this namespace
+			try {
+				const notesOutput = execSync(`git notes --ref=${namespace} list`, {
+					cwd: workspaceFolder.uri.fsPath,
+					encoding: 'utf8',
+					timeout: 5000,
+				}).trim();
+				
+				if (notesOutput) {
+					const noteLines = notesOutput.split('\n').filter((line: string) => line.trim());
+					
+					for (const noteLine of noteLines) {
+						const [, commitId] = noteLine.split(' ');
+						if (commitId) {
+							try {
+								execSync(`git notes --ref=${namespace} remove ${commitId}`, {
+									cwd: workspaceFolder.uri.fsPath,
+									timeout: 5000,
+								});
+							} catch (removeError) {
+								console.warn(`Failed to remove note for commit ${commitId}:`, removeError);
+							}
+						}
+					}
+					
+					// Try to push the removal to origin
+					try {
+						execSync(`git push origin refs/notes/${namespace}`, {
+							cwd: workspaceFolder.uri.fsPath,
+							timeout: 15000,
+						});
+					} catch (pushError) {
+						console.warn(`Failed to push Git notes deletion to origin:`, pushError);
+					}
+				}
+			} catch (listError) {
+				// No notes exist for this namespace, which is fine
+				console.debug(`No Git notes found for namespace ${namespace}:`, listError);
+			}
+		} catch (error) {
+			console.warn('Failed to clear Git notes:', error);
+			throw new Error(`Failed to clear Git notes: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	} else {
+		// Clear traditional file-based storage (homeDirectory and repository)
+		const logDir = getLogDirectory(workspaceFolder, document);
+		
+		if (fs.existsSync(logDir)) {
+			const files = fs.readdirSync(logDir);
+			const jsonFiles = files.filter(file => file.endsWith('.json'));
+			
+			for (const file of jsonFiles) {
+				const filePath = path.join(logDir, file);
+				try {
+					fs.unlinkSync(filePath);
+				} catch (error) {
+					console.warn(`Failed to delete file ${filePath}:`, error);
+				}
+			}
+			
+			// Try to remove the directory if it's empty
+			try {
+				if (fs.readdirSync(logDir).length === 0) {
+					fs.rmdirSync(logDir);
+				}
+			} catch (error) {
+				// Directory might not be empty or might not exist, which is fine
+			}
+		}
+	}
+	
+	// Clear any temporary files for experimental storage
+	if (storageType === 'experimental') {
+		const tempDir = path.join(getStorageDirectory(workspaceFolder, document), 'temp');
+		if (fs.existsSync(tempDir)) {
+			const files = fs.readdirSync(tempDir);
+			const namespace = getGitNotesNamespace(workspaceFolder, document);
+			const relatedFiles = files.filter(file => file.startsWith(namespace));
+			
+			for (const file of relatedFiles) {
+				try {
+					fs.unlinkSync(path.join(tempDir, file));
+				} catch (error) {
+					console.warn(`Failed to delete temp file ${file}:`, error);
+				}
+			}
+		}
+	}
+}
+
+async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
+
+	if (storageType === 'experimental') {
+		// Clear all Git notes with tabd prefix
+		try {
+			// Get all tabd-related notes refs
+			try {
+				const refsOutput = execSync(`git for-each-ref refs/notes/tabd__*`, {
+					cwd: workspaceFolder.uri.fsPath,
+					encoding: 'utf8',
+					timeout: 10000,
+				}).trim();
+				
+				if (refsOutput) {
+					const refLines = refsOutput.split('\n').filter((line: string) => line.trim());
+					
+					for (const refLine of refLines) {
+						const parts = refLine.split('\t');
+						if (parts.length >= 3) {
+							const refName = parts[2]; // refs/notes/tabd__...
+							const namespace = refName.replace('refs/notes/', '');
+							
+							try {
+								// Remove all notes in this namespace
+								const notesOutput = execSync(`git notes --ref=${namespace} list`, {
+									cwd: workspaceFolder.uri.fsPath,
+									encoding: 'utf8',
+									timeout: 5000,
+								}).trim();
+								
+								if (notesOutput) {
+									const noteLines = notesOutput.split('\n').filter((line: string) => line.trim());
+									
+									for (const noteLine of noteLines) {
+										const [, commitId] = noteLine.split(' ');
+										if (commitId) {
+											try {
+												execSync(`git notes --ref=${namespace} remove ${commitId}`, {
+													cwd: workspaceFolder.uri.fsPath,
+													timeout: 5000,
+												});
+											} catch (removeError) {
+												console.warn(`Failed to remove note for commit ${commitId}:`, removeError);
+											}
+										}
+									}
+								}
+								
+								// Try to push the removal to origin
+								try {
+									execSync(`git push origin refs/notes/${namespace}`, {
+										cwd: workspaceFolder.uri.fsPath,
+										timeout: 15000,
+									});
+								} catch (pushError) {
+									console.warn(`Failed to push Git notes deletion to origin for ${namespace}:`, pushError);
+								}
+							} catch (error) {
+								console.warn(`Failed to clear notes for namespace ${namespace}:`, error);
+							}
+						}
+					}
+				}
+			} catch (listError) {
+				// No tabd notes exist, which is fine
+				console.debug('No tabd Git notes found:', listError);
+			}
+		} catch (error) {
+			console.warn('Failed to clear Git notes:', error);
+			throw new Error(`Failed to clear Git notes: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	} else {
+		// Clear traditional file-based storage (homeDirectory and repository)
+		const storageDir = getStorageDirectory(workspaceFolder, { uri: workspaceFolder.uri } as vscode.TextDocument);
+		
+		if (fs.existsSync(storageDir)) {
+			try {
+				// Remove the entire storage directory recursively
+				fs.rmSync(storageDir, { recursive: true, force: true });
+			} catch (error) {
+				console.warn(`Failed to remove storage directory ${storageDir}:`, error);
+				throw new Error(`Failed to remove storage directory: ${error instanceof Error ? error.message : String(error)}`);
+			}
+		}
+	}
+	
+	// Clear experimental storage temp directory
+	if (storageType === 'experimental') {
+		const storageDir = getStorageDirectory(workspaceFolder, { uri: workspaceFolder.uri } as vscode.TextDocument);
+		if (fs.existsSync(storageDir)) {
+			try {
+				fs.rmSync(storageDir, { recursive: true, force: true });
+			} catch (error) {
+				console.warn(`Failed to remove experimental storage directory ${storageDir}:`, error);
+			}
+		}
+	}
 }
 
 export function deactivate() {}

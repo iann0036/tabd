@@ -50,6 +50,14 @@
       {
         "command": "tabd.toggleEnabled",
         "title": "Tab'd: Toggle Enabled"
+      },
+      {
+        "command": "tabd.clearDataFile",
+        "title": "Tab'd: Clear tracking data for the current file"
+      },
+      {
+        "command": "tabd.clearDataWorkspace",
+        "title": "Tab'd: Clear tracking data for the current workspace or repository"
       }
     ],
     "configuration": {
