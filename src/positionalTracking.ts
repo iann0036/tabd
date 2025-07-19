@@ -144,6 +144,10 @@ const getUpdatedRanges = (
                 const aiInfo = mostRecentInternalCommand.value;
 
                 if (aiInfo._type === 'insertEdit') {
+                    if (!aiInfo.insertText || aiInfo.insertText.trim().length === 0) {
+                        aiInfo.insertText = '';
+                    }
+
                     mostRecentInternalCommand.document = document;
 
                     aiInfo.insertText = aiInfo.insertText.replaceAll("// ...existing code...", "").trim();
@@ -202,7 +206,7 @@ const getUpdatedRanges = (
                     aiInfo.range = [change.range.start, change.range.end]; // TODO: should be whole document range
                 }
 
-                if (aiInfo.insertText.trim().includes(change.text.trim()) &&
+                if (aiInfo.insertText && aiInfo.insertText.trim().includes(change.text.trim()) &&
                     (
                         (
                             change.range.start.line === aiInfo.range[0].line &&
