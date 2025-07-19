@@ -84,6 +84,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 				fileState.changes = updatedRanges;
 
+				console.debug("Triggering decoration update due to onDidChangeTextDocument for", e.document.uri.fsPath);
 				triggerDecorationUpdate(e.document, updatedRanges);
 			});
 		}),
@@ -109,6 +110,7 @@ export function activate(context: vscode.ExtensionContext) {
 				const filePath = fsPath(editor.document.uri);
 				const fileState = globalFileState[filePath];
 				if (fileState && fileState.changes.length > 0) {
+					console.debug("Triggering decoration update due to onDidChangeActiveTextEditor for", editor.document.uri.fsPath);
 					triggerDecorationUpdate(editor.document, fileState.changes);
 				}
 			}
