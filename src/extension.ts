@@ -439,7 +439,7 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 	const config = vscode.workspace.getConfiguration('tabd');
 	const storageType = config.get<string>('storage', 'repository');
 
-	if (storageType === 'experimental') {
+	if (storageType === 'gitNotes') {
 		// Clear Git notes for this file
 		try {
 			const namespace = getGitNotesNamespace(workspaceFolder, document);
@@ -515,8 +515,8 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 		}
 	}
 	
-	// Clear any temporary files for experimental storage
-	if (storageType === 'experimental') {
+	// Clear any temporary files for git notes storage
+	if (storageType === 'gitNotes') {
 		const tempDir = path.join(getStorageDirectory(workspaceFolder, document), 'temp');
 		if (fs.existsSync(tempDir)) {
 			const files = fs.readdirSync(tempDir);
@@ -538,7 +538,7 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 	const config = vscode.workspace.getConfiguration('tabd');
 	const storageType = config.get<string>('storage', 'repository');
 
-	if (storageType === 'experimental') {
+	if (storageType === 'gitNotes') {
 		// Clear all Git notes with tabd prefix
 		try {
 			// Get all tabd-related notes refs
@@ -622,14 +622,14 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 		}
 	}
 	
-	// Clear experimental storage temp directory
-	if (storageType === 'experimental') {
+	// Clear git notes storage temp directory
+	if (storageType === 'gitNotes') {
 		const storageDir = getStorageDirectory(workspaceFolder, { uri: workspaceFolder.uri } as vscode.TextDocument);
 		if (fs.existsSync(storageDir)) {
 			try {
 				fs.rmSync(storageDir, { recursive: true, force: true });
 			} catch (error) {
-				console.warn(`Failed to remove experimental storage directory ${storageDir}:`, error);
+				console.warn(`Failed to remove git notes storage directory ${storageDir}:`, error);
 			}
 		}
 	}
@@ -656,7 +656,7 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 	const config = vscode.workspace.getConfiguration('tabd');
 	const storageType = config.get<string>('storage', 'repository');
 
-	if (currentUser === "" && (storageType === 'repository' || storageType === 'experimental')) {
+	if (currentUser === "" && (storageType === 'repository' || storageType === 'gitNotes')) {
 		currentUser = getCurrentGitUser(workspaceFolder);
 	}
 
@@ -670,7 +670,7 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 				end: change.end,
 				type: change.getType(),
 				creationTimestamp: change.getCreationTimestamp(),
-				author: change.getAuthor() || currentUser || ((storageType === 'repository' || storageType === 'experimental') ? 'an unknown user' : ''),
+				author: change.getAuthor() || currentUser || ((storageType === 'repository' || storageType === 'gitNotes') ? 'an unknown user' : ''),
 				pasteUrl: change.getPasteUrl() || '',
 				pasteTitle: change.getPasteTitle() || '',
 				aiName: change.getAiName() || '',
@@ -684,7 +684,7 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 	dataToSave.checksum = generateDataChecksum(fileContent);
 
 	// Handle gitnotes storage
-	if (storageType === 'experimental') {
+	if (storageType === 'gitNotes') {
 		// Check if Git is initialized at the workspace root
 		const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
 		const isGitRepo = fs.existsSync(gitPath);
@@ -773,7 +773,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 	const config = vscode.workspace.getConfiguration('tabd');
 	const storageType = config.get<string>('storage', 'repository');
 	
-	if (storageType === 'repository' || storageType === 'experimental') {
+	if (storageType === 'repository' || storageType === 'gitNotes') {
 		// Set the current user if not already set
 		if (currentUser === "") {
 			currentUser = getCurrentGitUser(workspaceFolder) || "";
@@ -788,7 +788,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 	}
 
 	// Handle gitnotes storage
-	if (storageType === 'experimental') {
+	if (storageType === 'gitNotes') {
 		const namespace = getGitNotesNamespace(workspaceFolder, document);
 		const noteData = loadFromGitNotes(workspaceFolder, document, namespace);
 		

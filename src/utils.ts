@@ -109,7 +109,7 @@ export function getStorageDirectory(workspaceFolder: vscode.WorkspaceFolder, doc
 		return path.join(os.homedir(), '.tabd', 'workspaces', sanitizedPath);
 	} else if (storageType === 'repository') {
 		return path.join(workspaceFolder.uri.fsPath, '.tabd');
-	} else if (storageType === 'experimental') {
+	} else if (storageType === 'gitNotes') {
 		// For gitnotes, use home directory to store temporary files before applying to git notes
 		const workspacePath = workspaceFolder.uri.fsPath;
 		const sanitizedPath = workspacePath
@@ -117,7 +117,7 @@ export function getStorageDirectory(workspaceFolder: vscode.WorkspaceFolder, doc
 			.replace(/_+/g, '_')
 			.replace(/^_|_$/g, '');
 		
-		return path.join(os.homedir(), '.tabd', 'experimental', sanitizedPath);
+		return path.join(os.homedir(), '.tabd', 'gitnotes', sanitizedPath);
 	} else {
 		throw new Error(`Unsupported storage type: ${storageType}`);
 	}
@@ -127,7 +127,7 @@ export function getLogDirectory(workspaceFolder: vscode.WorkspaceFolder, documen
 	const config = vscode.workspace.getConfiguration('tabd');
 	const storageType = config.get<string>('storage', 'repository');
 	
-	if (storageType === 'experimental') {
+	if (storageType === 'gitNotes') {
 		// For gitnotes, we don't use a traditional log directory structure
 		// Instead, we create a temp directory for note content files
 		const baseStorageDir = getStorageDirectory(workspaceFolder, document);

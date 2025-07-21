@@ -139,12 +139,12 @@ suite('Utils Test Suite', () => {
 			}
 		});
 
-		test('should generate experimental storage path', () => {
+		test('should generate git notes storage path', () => {
 			const origGet = vscode.workspace.getConfiguration;
 			vscode.workspace.getConfiguration = () => ({
 				get: (key: string, defaultValue?: any) => {
 					if (key === 'storage') {
-						return 'experimental';
+						return 'gitNotes';
 					}
 					return defaultValue;
 				}
@@ -152,7 +152,7 @@ suite('Utils Test Suite', () => {
 
 			try {
 				const storageDir = getStorageDirectory(mockWorkspaceFolder, mockDocument);
-				assert.ok(storageDir.includes('experimental'));
+				assert.ok(storageDir.includes('gitnotes'));
 				assert.ok(storageDir.includes('.tabd'));
 			} finally {
 				vscode.workspace.getConfiguration = origGet;
@@ -211,12 +211,12 @@ suite('Utils Test Suite', () => {
 			}
 		});
 
-		test('should generate temp directory for experimental storage', () => {
+		test('should generate temp directory for git notes storage', () => {
 			const origGet = vscode.workspace.getConfiguration;
 			vscode.workspace.getConfiguration = () => ({
 				get: (key: string, defaultValue?: any) => {
 					if (key === 'storage') {
-						return 'experimental';
+						return 'gitNotes';
 					}
 					return defaultValue;
 				}

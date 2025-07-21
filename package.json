@@ -78,12 +78,12 @@
           "enum": [
             "homeDirectory",
             "repository",
-            "experimental"
+            "gitNotes"
           ],
           "enumDescriptions": [
             "Store data in your home directory",
             "Store data in the repository",
-            "Use the experimental storage mode"
+            "Store data in git notes"
           ],
           "default": "homeDirectory",
           "description": "Choose where to store Tab'd data"
