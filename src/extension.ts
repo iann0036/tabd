@@ -196,6 +196,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 
 		// Register the listener for when files are renamed
+		// TODO: Change this to an absolute storage state change, as there is no guarantee globalFileState[oldFilePath] is loaded
 		vscode.workspace.onDidRenameFiles(e => {
 			for (const rename of e.files) {
 				if (rename.oldUri.scheme !== 'file' || !shouldProcessFile(rename.oldUri)) {
@@ -206,20 +207,28 @@ export function activate(context: vscode.ExtensionContext) {
 				const newFilePath = fsPath(rename.newUri);
 
 				if (globalFileState[oldFilePath]) {
-					// Move the file state to the new path
-					globalFileState[newFilePath] = globalFileState[oldFilePath];
-					delete globalFileState[oldFilePath];
-					
-					// Update the save path if it exists
-					if (globalFileState[newFilePath].savePath) {
-						globalFileState[newFilePath].savePath = globalFileState[newFilePath].savePath.replace(oldFilePath, newFilePath);
-					}
-
-					// Open the new document to load its state
-					vscode.workspace.openTextDocument(vscode.Uri.file(newFilePath)).then(newDocument => {
-						if (newDocument) {
-							saveFileState(newDocument);
+					editLock.runExclusive(async () => {
+						// Move the file state to the new path
+						globalFileState[newFilePath] = globalFileState[oldFilePath];
+						delete globalFileState[oldFilePath];
+						
+						// Update the save path if it exists
+						if (globalFileState[newFilePath].savePath) {
+							globalFileState[newFilePath].savePath = globalFileState[newFilePath].savePath.replace(oldFilePath, newFilePath);
 						}
+
+						// Force all changes to be saved
+						globalFileState[newFilePath].loadTimestamp = undefined;
+
+						console.debug(`Moved file state from ${oldFilePath} to ${newFilePath}`);
+						console.debug(globalFileState[newFilePath]);
+					}).then(() => {
+						// Open the new document to load its state
+						vscode.workspace.openTextDocument(vscode.Uri.file(newFilePath)).then(newDocument => {
+							if (newDocument) {
+								saveFileState(newDocument);
+							}
+						});
 					});
 				}
 			}
@@ -678,6 +687,11 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 				aiExplanation: change.getAiExplanation() || '',
 			})),
 	};
+
+	if (dataToSave.changes.length === 0) {
+		console.warn(`No changes to save for ${document.uri.fsPath}. Skipping file state save.`);
+		return;
+	}
 
 	// Generate checksum for the actual file content
 	const fileContent = document.getText();
