@@ -120,7 +120,10 @@ const getUpdatedRanges = (
 
             const aiInfo = mostRecentInternalCommand.value;
             options.aiName = aiInfo._extensionName || 'unknown';
-            options.aiModel = aiInfo._modelId || aiInfo.command?.arguments[0]?.telemetry?.properties?.engineName || '';
+            options.aiModel = aiInfo._modelId || '';
+            if (!options.aiModel && aiInfo.command && aiInfo.command.arguments && aiInfo.command.arguments.length > 0 && aiInfo.command.arguments[0].telemetry && aiInfo.command.arguments[0].telemetry.properties && aiInfo.command.arguments[0].telemetry.properties.engineName) {
+                options.aiModel = aiInfo.command.arguments[0].telemetry.properties.engineName;
+            }
             options.aiExplanation = aiInfo._explanation || '';
             options.aiType = aiInfo._type || '';
 
@@ -221,7 +224,10 @@ const getUpdatedRanges = (
                     )
                 ) {
                     options.aiName = aiInfo._extensionName || 'unknown';
-                    options.aiModel = aiInfo._modelId || aiInfo.command.arguments[0].telemetry.properties.engineName || '';
+                    options.aiModel = aiInfo._modelId || '';
+                    if (!options.aiModel && aiInfo.command && aiInfo.command.arguments && aiInfo.command.arguments.length > 0 && aiInfo.command.arguments[0].telemetry && aiInfo.command.arguments[0].telemetry.properties && aiInfo.command.arguments[0].telemetry.properties.engineName) {
+                        options.aiModel = aiInfo.command.arguments[0].telemetry.properties.engineName;
+                    }
                     options.aiExplanation = aiInfo._explanation || '';
                     options.aiType = aiInfo._type || '';
                     /*if (aiInfo.oldText) {
@@ -235,7 +241,7 @@ const getUpdatedRanges = (
                     }*/
                     isAI = true;
                 }
-            } catch (error) { 
+            } catch (error) {
                 console.error("Error processing AI range:", error);
             }
 

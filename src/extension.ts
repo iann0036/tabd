@@ -418,6 +418,14 @@ export function activate(context: vscode.ExtensionContext) {
 
 			const obj = JSON.parse(String(args));
 
+			if (!obj.filePath) {
+				if (obj.command.arguments && obj.command.arguments[0] && obj.command.arguments[0].uri) {
+					obj.filePath = fsPath(vscode.Uri.parse(obj.command.arguments[0].uri));
+				} else {
+					return;
+				}
+			}
+
 			let d = await vscode.workspace.openTextDocument(vscode.Uri.file(obj.filePath));
 
 			if (obj._type === 'postInsertEdit') {
