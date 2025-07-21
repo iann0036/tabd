@@ -167,7 +167,7 @@ suite('Positional Tracking Test Suite', () => {
 				existingRanges,
 				pasteRanges,
 				changes,
-				undefined,
+				ExtendedRangeType.AIGenerated,
 				mockDoc
 			);
 
