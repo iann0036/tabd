@@ -90,12 +90,12 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 		}),
 
-		// Register listener for when text editors are opened
-		vscode.window.onDidChangeActiveTextEditor(editor => {
-			if (!editor || editor.document.uri.scheme !== 'file' || !shouldProcessFile(editor.document.uri)) {
+		// Register listener for when text documents are opened
+		vscode.workspace.onDidOpenTextDocument(document => {
+			if (document.uri.scheme !== 'file' || !shouldProcessFile(document.uri)) {
 				return;
 			}
-			
+
 			// Check if tracking is disabled
 			const config = vscode.workspace.getConfiguration('tabd');
 			const disabled = config.get<boolean>('disabled', false);
@@ -103,10 +103,24 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
-			loadGlobalFileStateForDocumentFromDisk(editor.document);
-			
+			loadGlobalFileStateForDocumentFromDisk(document);
+		}),
+
+		// Register listener for when text editors are opened
+		vscode.window.onDidChangeActiveTextEditor(editor => {
+			if (!editor || editor.document.uri.scheme !== 'file' || !shouldProcessFile(editor.document.uri)) {
+				return;
+			}
+
+			// Check if tracking is disabled
+			const config = vscode.workspace.getConfiguration('tabd');
+			const disabled = config.get<boolean>('disabled', false);
+			if (disabled) {
+				return;
+			}
+
 			const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
-			
+
 			if (showBlameByDefault) {
 				const filePath = fsPath(editor.document.uri);
 				const fileState = globalFileState[filePath];
@@ -177,115 +191,37 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			
 			if (globalFileState[fsPath(document.uri)]) {
-				editLock.runExclusive(() => {
-					// Save the current state of the file
-					const fileState = globalFileState[fsPath(document.uri)];
+				editLock.runExclusive(() => saveFileState(document));
+			}
+		}),
 
-					// If there are no changes recorded, skip saving
-					if (!fileState || fileState.changes.length === 0) {
-						console.warn(`No changes recorded for ${document.uri.fsPath}. Skipping file state save.`);
-						return;
-					}
+		// Register the listener for when files are renamed
+		vscode.workspace.onDidRenameFiles(e => {
+			for (const rename of e.files) {
+				if (rename.oldUri.scheme !== 'file' || !shouldProcessFile(rename.oldUri)) {
+					continue;
+				}
 
-					const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-					if (!workspaceFolder) {
-						console.warn(`No workspace folder found for ${document.uri.fsPath}. Cannot save file state.`);
-						return;
-					}
+				const oldFilePath = fsPath(rename.oldUri);
+				const newFilePath = fsPath(rename.newUri);
 
-					const config = vscode.workspace.getConfiguration('tabd');
-					const storageType = config.get<string>('storage', 'repository');
-
-					if (currentUser === "" && (storageType === 'repository' || storageType === 'experimental')) {
-						currentUser = getCurrentGitUser(workspaceFolder);
-					}
-
-					// Prepare the data to save
-					const dataToSave: SerializedFileState = {
-						version: 1,
-						changes: mergeUserEdits(fileState.changes)
-							.filter(change => change.getCreationTimestamp() > (fileState.loadTimestamp || 0))
-							.map(change => ({
-								start: change.start,
-								end: change.end,
-								type: change.getType(),
-								creationTimestamp: change.getCreationTimestamp(),
-								author: change.getAuthor() || currentUser || ((storageType === 'repository' || storageType === 'experimental') ? 'an unknown user' : ''),
-								pasteUrl: change.getPasteUrl() || '',
-								pasteTitle: change.getPasteTitle() || '',
-								aiName: change.getAiName() || '',
-								aiModel: change.getAiModel() || '',
-								aiExplanation: change.getAiExplanation() || '',
-							})),
-					};
-
-					// Generate checksum for the actual file content
-					const fileContent = document.getText();
-					dataToSave.checksum = generateDataChecksum(fileContent);
-
-					// Handle gitnotes storage
-					if (storageType === 'experimental') {
-						// Check if Git is initialized at the workspace root
-						const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
-						const isGitRepo = fs.existsSync(gitPath);
-						
-						if (!isGitRepo) {
-							console.warn('No Git repository found. Skipping file state save.');
-							return;
-						}
-
-						try {
-							const namespace = getGitNotesNamespace(workspaceFolder, document);
-							saveToGitNotes(workspaceFolder, document, dataToSave, namespace);
-							
-							globalFileState[fsPath(document.uri)] = fileState;
-						} catch (error) {
-							console.error('Failed to save to Git notes:', error);
-						}
-						return;
-					}
-
-					// Write to existing file if it exists (traditional storage)
-					if (fileState.savePath) {
-						fs.writeFileSync(fileState.savePath, JSON.stringify(dataToSave));
-						return;
-					}
-
-					// Check is Git is initialized at the workspace root (only required for repository storage)					
-					if (storageType === 'repository') {
-						const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
-						const isGitRepo = fs.existsSync(gitPath);
-						
-						if (!isGitRepo) {
-							console.warn('No Git repository found. Skipping file state save.');
-							return;
-						}
-					}
+				if (globalFileState[oldFilePath]) {
+					// Move the file state to the new path
+					globalFileState[newFilePath] = globalFileState[oldFilePath];
+					delete globalFileState[oldFilePath];
 					
-					// Get the appropriate storage directory
-					const baseStorageDir = getStorageDirectory(workspaceFolder, document);
-					if (!fs.existsSync(baseStorageDir)) {
-						fs.mkdirSync(baseStorageDir, { recursive: true });
-						// TODO: Make a README.md file in the storage directory
+					// Update the save path if it exists
+					if (globalFileState[newFilePath].savePath) {
+						globalFileState[newFilePath].savePath = globalFileState[newFilePath].savePath.replace(oldFilePath, newFilePath);
 					}
 
-					// Write the file state to a JSON file
-					const fileChangeRecordDir = getLogDirectory(workspaceFolder, document);
-					const fileChangeRecordPath = path.join(fileChangeRecordDir, uniqueFileName());
-					if (!fs.existsSync(fileChangeRecordDir)) {
-						fs.mkdirSync(fileChangeRecordDir, { recursive: true });
-					}
-					if (fs.existsSync(fileChangeRecordPath)) {
-						throw new Error(`File change record already exists at ${fileChangeRecordPath}. This should not happen!`);
-					}
-					
-					// Write the file state to a JSON file with checksum
-					fs.writeFileSync(fileChangeRecordPath, JSON.stringify(dataToSave));
-
-					// Update the global file state
-					fileState.savePath = fileChangeRecordPath;
-					globalFileState[fsPath(document.uri)] = fileState;
-				});
+					// Open the new document to load its state
+					vscode.workspace.openTextDocument(vscode.Uri.file(newFilePath)).then(newDocument => {
+						if (newDocument) {
+							saveFileState(newDocument);
+						}
+					});
+				}
 			}
 		}),
 
@@ -700,6 +636,116 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 }
 
 export function deactivate() {}
+
+async function saveFileState(document: vscode.TextDocument): Promise<void> {
+	// Save the current state of the file
+	const fileState = globalFileState[fsPath(document.uri)];
+
+	// If there are no changes recorded, skip saving
+	if (!fileState || fileState.changes.length === 0) {
+		console.warn(`No changes recorded for ${document.uri.fsPath}. Skipping file state save.`);
+		return;
+	}
+
+	const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+	if (!workspaceFolder) {
+		console.warn(`No workspace folder found for ${document.uri.fsPath}. Cannot save file state.`);
+		return;
+	}
+
+	const config = vscode.workspace.getConfiguration('tabd');
+	const storageType = config.get<string>('storage', 'repository');
+
+	if (currentUser === "" && (storageType === 'repository' || storageType === 'experimental')) {
+		currentUser = getCurrentGitUser(workspaceFolder);
+	}
+
+	// Prepare the data to save
+	const dataToSave: SerializedFileState = {
+		version: 1,
+		changes: mergeUserEdits(fileState.changes)
+			.filter(change => change.getCreationTimestamp() > (fileState.loadTimestamp || 0))
+			.map(change => ({
+				start: change.start,
+				end: change.end,
+				type: change.getType(),
+				creationTimestamp: change.getCreationTimestamp(),
+				author: change.getAuthor() || currentUser || ((storageType === 'repository' || storageType === 'experimental') ? 'an unknown user' : ''),
+				pasteUrl: change.getPasteUrl() || '',
+				pasteTitle: change.getPasteTitle() || '',
+				aiName: change.getAiName() || '',
+				aiModel: change.getAiModel() || '',
+				aiExplanation: change.getAiExplanation() || '',
+			})),
+	};
+
+	// Generate checksum for the actual file content
+	const fileContent = document.getText();
+	dataToSave.checksum = generateDataChecksum(fileContent);
+
+	// Handle gitnotes storage
+	if (storageType === 'experimental') {
+		// Check if Git is initialized at the workspace root
+		const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
+		const isGitRepo = fs.existsSync(gitPath);
+		
+		if (!isGitRepo) {
+			console.warn('No Git repository found. Skipping file state save.');
+			return;
+		}
+
+		try {
+			const namespace = getGitNotesNamespace(workspaceFolder, document);
+			saveToGitNotes(workspaceFolder, document, dataToSave, namespace);
+			
+			globalFileState[fsPath(document.uri)] = fileState;
+		} catch (error) {
+			console.error('Failed to save to Git notes:', error);
+		}
+		return;
+	}
+
+	// Write to existing file if it exists (traditional storage)
+	if (fileState.savePath) {
+		fs.writeFileSync(fileState.savePath, JSON.stringify(dataToSave));
+		return;
+	}
+
+	// Check is Git is initialized at the workspace root (only required for repository storage)					
+	if (storageType === 'repository') {
+		const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
+		const isGitRepo = fs.existsSync(gitPath);
+		
+		if (!isGitRepo) {
+			console.warn('No Git repository found. Skipping file state save.');
+			return;
+		}
+	}
+	
+	// Get the appropriate storage directory
+	const baseStorageDir = getStorageDirectory(workspaceFolder, document);
+	if (!fs.existsSync(baseStorageDir)) {
+		fs.mkdirSync(baseStorageDir, { recursive: true });
+		// TODO: Make a README.md file in the storage directory
+	}
+
+	// Write the file state to a JSON file
+	const fileChangeRecordDir = getLogDirectory(workspaceFolder, document);
+	const fileChangeRecordPath = path.join(fileChangeRecordDir, uniqueFileName());
+	if (!fs.existsSync(fileChangeRecordDir)) {
+		fs.mkdirSync(fileChangeRecordDir, { recursive: true });
+	}
+	if (fs.existsSync(fileChangeRecordPath)) {
+		throw new Error(`File change record already exists at ${fileChangeRecordPath}. This should not happen!`);
+	}
+	
+	// Write the file state to a JSON file with checksum
+	fs.writeFileSync(fileChangeRecordPath, JSON.stringify(dataToSave));
+
+	// Update the global file state
+	fileState.savePath = fileChangeRecordPath;
+	globalFileState[fsPath(document.uri)] = fileState;
+}
 
 function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | undefined) {
 	if (!document) {
