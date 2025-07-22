@@ -224,7 +224,7 @@ export function activate(context: vscode.ExtensionContext) {
 						console.debug(globalFileState[newFilePath]);
 					}).then(() => {
 						// Open the new document to load its state
-						vscode.workspace.openTextDocument(vscode.Uri.file(newFilePath)).then(newDocument => {
+						vscode.workspace.openTextDocument(rename.newUri).then(newDocument => {
 							if (newDocument) {
 								saveFileState(newDocument);
 							}
@@ -363,17 +363,21 @@ export function activate(context: vscode.ExtensionContext) {
 
 			const obj = JSON.parse(String(args));
 
+			if (!obj || !obj._type) {
+				console.warn("Received invalid internal command:", obj);
+				return;
+			}
+
 			if (!obj.filePath) {
 				if (obj.command.arguments && obj.command.arguments[0] && obj.command.arguments[0].uri) {
 					obj.filePath = fsPath(vscode.Uri.parse(obj.command.arguments[0].uri));
 				} else {
+					console.warn("Received internal command without filePath:", obj);
 					return;
 				}
 			}
 
-			let d = await vscode.workspace.openTextDocument(vscode.Uri.file(obj.filePath));
-
-			if (obj._type === 'postInsertEdit') {
+			if (obj._type === 'onAfterInsertEditTool') {
 				editLock.runExclusive(async () => {
 					let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
 					let updatedRanges = getUpdatedRanges(
@@ -389,11 +393,35 @@ export function activate(context: vscode.ExtensionContext) {
 					triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
 				});
 				return;
+			} else if (obj._type === 'onAfterApplyPatchTool') {
+				// delay setting the most recent command
+				console.debug("Started delay");
+
+				setTimeout(() => {
+					console.log("Triggering delayed onAfterApplyPatchTool");
+					editLock.runExclusive(async () => {
+						let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
+						let updatedRanges = getUpdatedRanges(
+							fileState.changes,
+							fileState.pasteRanges,
+							mostRecentInternalCommand.changes,
+							ExtendedRangeType.AIGenerated,
+							mostRecentInternalCommand.document,
+						);
+
+						fileState.changes = updatedRanges;
+
+						triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
+					});
+				}, 100);
+				return;
 			}
 			
+			let d = await vscode.workspace.openTextDocument(vscode.Uri.parse(obj.filePath));
+			mostRecentInternalCommand.document = d;
 			mostRecentInternalCommand.value = obj;
 			
-			if (obj._type === 'createFile') {
+			if (obj._type === 'onBeforeCreateFileTool') {
 				editLock.runExclusive(async () => {
 					let fileState = globalFileState[fsPath(d.uri)];
 					let updatedRanges: ExtendedRange[];

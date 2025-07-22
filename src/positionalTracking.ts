@@ -8,6 +8,17 @@ let mostRecentInternalCommand: any = {
     changes: [],
 };
 
+const typeMap: { [key: string]: string } = {
+    'onBeforeApplyPatchTool': 'applyPatch',
+    'onBeforeCreateFileTool': 'createFile',
+    'onBeforeInsertEditTool': 'insertEdit',
+    'onBeforeReplaceStringTool': 'replaceString',
+    'onAfterApplyPatchTool': 'applyPatch',
+    'onAfterCreateFileTool': 'createFile',
+    'onAfterInsertEditTool': 'insertEdit',
+    'onAfterReplaceStringTool': 'replaceString'
+};
+
 const getUpdatedPosition = (
     position: vscode.Position,
     change: vscode.TextDocumentContentChangeEvent
@@ -63,6 +74,8 @@ const getUpdatedRanges = (
     let toUpdateRanges: (ExtendedRange | null)[] = [...ranges];
     let additionalRanges: ExtendedRange[] = [];
 
+    console.debug("getUpdatedRanges called with reason:", reason, "and changes:", JSON.stringify(changes), "and mostRecentInternalCommand:", mostRecentInternalCommand);
+
     if (
         changes.length > 1 &&
         changes[changes.length - 1].range.end.line === 0 &&
@@ -79,6 +92,8 @@ const getUpdatedRanges = (
     let sortedChanges = [...changes].sort((change1, change2) =>
         change2.range.start.compareTo(change1.range.start)
     );
+
+    const aiInfo = mostRecentInternalCommand.value;
 
     for (const change of sortedChanges) {
         // Add new ranges
@@ -115,17 +130,17 @@ const getUpdatedRanges = (
 
 
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), reason, Date.now(), '', options));
-        } else if (reason === ExtendedRangeType.AIGenerated) { // e.g. postInsertEdit
+        } else if (reason === ExtendedRangeType.AIGenerated) { // e.g. onAfterInsertEditTool
+            console.debug("Processing AI generated range:", aiInfo);
             const options = new ExtendedRangeOptions();
 
-            const aiInfo = mostRecentInternalCommand.value;
             options.aiName = aiInfo._extensionName || 'unknown';
             options.aiModel = aiInfo._modelId || '';
             if (!options.aiModel && aiInfo.command && aiInfo.command.arguments && aiInfo.command.arguments.length > 0 && aiInfo.command.arguments[0].telemetry && aiInfo.command.arguments[0].telemetry.properties && aiInfo.command.arguments[0].telemetry.properties.engineName) {
                 options.aiModel = aiInfo.command.arguments[0].telemetry.properties.engineName;
             }
             options.aiExplanation = aiInfo._explanation || '';
-            options.aiType = aiInfo._type || '';
+            options.aiType = aiInfo._type ? (typeMap[aiInfo._type] || aiInfo._type) : '';
 
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIGenerated, Date.now(), '', options));
 
@@ -136,7 +151,7 @@ const getUpdatedRanges = (
             mostRecentInternalCommand.changes = [];
         } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
-        } else if (change.text.trim().length <= 1) {
+        } else if (change.text.trim().length <= 1 && aiInfo._type !== 'onBeforeInsertEditTool' && aiInfo._type !== 'onBeforeApplyPatchTool' && aiInfo._type !== 'onBeforeCreateFileTool' && aiInfo._type !== 'onBeforeReplaceStringTool') {
             additionalRanges.push(new ExtendedRange(change.range.start, change.range.end, ExtendedRangeType.UserEdit, Date.now()));
         } else {
             let startPosition = change.range.start;
@@ -144,11 +159,14 @@ const getUpdatedRanges = (
 
             const options = new ExtendedRangeOptions();
             try {
-                const aiInfo = mostRecentInternalCommand.value;
-
-                if (aiInfo._type === 'insertEdit') {
+                if (aiInfo._type === 'onBeforeInsertEditTool') {
                     if (!aiInfo.insertText || aiInfo.insertText.trim().length === 0) {
                         aiInfo.insertText = '';
+                    }
+
+                    if (!aiInfo.oldText) {
+                        console.error("AI insertText is set but oldText is not set, this is unexpected behavior for onBeforeInsertEditTool.");
+                        continue;
                     }
 
                     mostRecentInternalCommand.document = document;
@@ -203,6 +221,10 @@ const getUpdatedRanges = (
                     ];
 
                     continue;
+                } else if (aiInfo._type === 'onBeforeApplyPatchTool' || aiInfo._type === 'onBeforeCreateFileTool' || aiInfo._type === 'onBeforeReplaceStringTool') {
+                    mostRecentInternalCommand.document = document; // TODO: verify this is what it was
+                    mostRecentInternalCommand.changes = changes;
+                    continue;
                 }
 
                 if (!aiInfo.range) {
@@ -217,9 +239,6 @@ const getUpdatedRanges = (
                             change.range.end.line === aiInfo.range[1].line &&
                             change.range.end.character === aiInfo.range[1].character &&
                             aiInfo._timestamp > Date.now() - 2000
-                        ) || (
-                            aiInfo._type === 'insertEdit' &&
-                            aiInfo._timestamp > Date.now() - 5000
                         )
                     )
                 ) {
@@ -229,16 +248,7 @@ const getUpdatedRanges = (
                         options.aiModel = aiInfo.command.arguments[0].telemetry.properties.engineName;
                     }
                     options.aiExplanation = aiInfo._explanation || '';
-                    options.aiType = aiInfo._type || '';
-                    /*if (aiInfo.oldText) {
-                        // Get first instance of a differing character between oldText and insertText
-                        let differingIndex = 0;
-                        while (differingIndex < aiInfo.oldText.length && differingIndex < change.text.length && aiInfo.oldText[differingIndex] === change.text[differingIndex]) {
-                            differingIndex++;
-                        }
-
-                        startPosition = document.positionAt(document.offsetAt(change.range.start) + differingIndex - aiInfo.insertText.indexOf(change.text));
-                    }*/
+                    options.aiType = aiInfo._type ? (typeMap[aiInfo._type] || aiInfo._type) : '';
                     isAI = true;
                 }
             } catch (error) {
@@ -247,8 +257,6 @@ const getUpdatedRanges = (
 
             if (isAI) {
                 additionalRanges.push(new ExtendedRange(startPosition, endPosition, ExtendedRangeType.AIGenerated, Date.now(), '', options));
-            } else {
-                //additionalRanges.push(new ExtendedRange(startPosition, endPosition, ExtendedRangeType.Unknown, Date.now(), '', options));
             }
         }
 
