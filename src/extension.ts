@@ -428,7 +428,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 					if (!fileState) {
 						fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
-					}
+					} // TODO: handle else case as an unusual case
 					
 					updatedRanges = getUpdatedRanges(
 						fileState.changes,
@@ -713,6 +713,7 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 				aiName: change.getAiName() || '',
 				aiModel: change.getAiModel() || '',
 				aiExplanation: change.getAiExplanation() || '',
+				aiType: change.getAiType() || '',
 			})),
 	};
 

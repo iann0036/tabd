@@ -16,7 +16,8 @@ const typeMap: { [key: string]: string } = {
     'onAfterApplyPatchTool': 'applyPatch',
     'onAfterCreateFileTool': 'createFile',
     'onAfterInsertEditTool': 'insertEdit',
-    'onAfterReplaceStringTool': 'replaceString'
+    'onAfterReplaceStringTool': 'replaceString',
+    'inlineCompletion': 'inlineCompletion',
 };
 
 const getUpdatedPosition = (
@@ -169,8 +170,6 @@ const getUpdatedRanges = (
                         continue;
                     }
 
-                    mostRecentInternalCommand.document = document;
-
                     aiInfo.insertText = aiInfo.insertText.replaceAll("// ...existing code...", "").trim();
 
                     // calculate new range offsets
@@ -208,6 +207,8 @@ const getUpdatedRanges = (
                         endOffset = aiInfo.insertText.length;
                     }
 
+
+                    mostRecentInternalCommand.document = document;
                     mostRecentInternalCommand.changes = [
                         {
                             range: new vscode.Range( // calculated to not delete anything (kind of)
@@ -219,7 +220,6 @@ const getUpdatedRanges = (
                             text: aiInfo.insertText.substring(startOffset, endOffset),
                         }
                     ];
-
                     continue;
                 } else if (aiInfo._type === 'onBeforeApplyPatchTool' || aiInfo._type === 'onBeforeCreateFileTool' || aiInfo._type === 'onBeforeReplaceStringTool') {
                     mostRecentInternalCommand.document = document; // TODO: verify this is what it was
