@@ -132,7 +132,7 @@ const getUpdatedRanges = (
 
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), reason, Date.now(), '', options));
         } else if (reason === ExtendedRangeType.AIGenerated) { // e.g. onAfterInsertEditTool
-            console.debug("Processing AI generated range:", aiInfo);
+            console.debug("Processing AI generated range:", aiInfo, change);
             const options = new ExtendedRangeOptions();
 
             options.aiName = aiInfo._extensionName || 'unknown';
@@ -152,7 +152,7 @@ const getUpdatedRanges = (
             mostRecentInternalCommand.changes = [];
         } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
-        } else if (change.text.trim().length <= 1 && aiInfo._type !== 'onBeforeInsertEditTool' && aiInfo._type !== 'onBeforeApplyPatchTool' && aiInfo._type !== 'onBeforeCreateFileTool' && aiInfo._type !== 'onBeforeReplaceStringTool') {
+        } else if (change.text.trim().length <= 1 && aiInfo._type !== 'onBeforeInsertEditTool' && aiInfo._type !== 'onBeforeApplyPatchTool' && aiInfo._type !== 'onBeforeCreateFileTool' && aiInfo._type !== 'onBeforeReplaceStringTool' && aiInfo._type !== 'onAfterReplaceStringTool' && aiInfo._type !== 'onAfterApplyPatchTool') {
             additionalRanges.push(new ExtendedRange(change.range.start, change.range.end, ExtendedRangeType.UserEdit, Date.now()));
         } else {
             let startPosition = change.range.start;
@@ -251,6 +251,12 @@ const getUpdatedRanges = (
                     options.aiExplanation = aiInfo._explanation || '';
                     options.aiType = aiInfo._type ? (typeMap[aiInfo._type] || aiInfo._type) : '';
                     isAI = true;
+
+                    if (aiInfo._type === 'onAfterReplaceStringTool' || aiInfo._type === 'onAfterApplyPatchTool') { // use only once
+                        mostRecentInternalCommand.value = { "_type": "initial" };
+                        mostRecentInternalCommand.document = null;
+                        mostRecentInternalCommand.changes = [];
+                    }
                 }
             } catch (error) {
                 console.error("Error processing AI range:", error);

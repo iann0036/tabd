@@ -370,50 +370,6 @@ export function activate(context: vscode.ExtensionContext) {
 					triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
 				});
 				return;
-			} else if (obj._type === 'onAfterApplyPatchTool') {
-				// delay setting the most recent command
-				console.debug("Started delay");
-
-				setTimeout(() => {
-					console.log("Triggering delayed onAfterApplyPatchTool");
-					editLock.runExclusive(async () => {
-						let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
-						let updatedRanges = getUpdatedRanges(
-							fileState.changes,
-							fileState.pasteRanges,
-							mostRecentInternalCommand.changes,
-							ExtendedRangeType.AIGenerated,
-							mostRecentInternalCommand.document,
-						);
-
-						fileState.changes = updatedRanges;
-
-						triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
-					});
-				}, 100);
-				return;
-			} else if (obj._type === 'onAfterReplaceStringTool') {
-				// delay setting the most recent command
-				console.debug("Started delay");
-
-				setTimeout(() => {
-					console.log("Triggering delayed onAfterReplaceStringTool");
-					editLock.runExclusive(async () => {
-						let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
-						let updatedRanges = getUpdatedRanges(
-							fileState.changes,
-							fileState.pasteRanges,
-							mostRecentInternalCommand.changes,
-							ExtendedRangeType.AIGenerated,
-							mostRecentInternalCommand.document,
-						);
-
-						fileState.changes = updatedRanges;
-
-						triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
-					});
-				}, 100);
-				return;
 			}
 
 			let d = await vscode.workspace.openTextDocument(vscode.Uri.parse(obj.filePath));
