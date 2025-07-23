@@ -17,6 +17,10 @@ export async function enableClipboardTracking() {
     if (disabled) {
         return; // Tracking is disabled
     }
+    const enableIDEClipboardMonitoring = config.get<boolean>('enableIDEClipboardMonitoring', true);
+    if (!enableIDEClipboardMonitoring) {
+        return; // IDE clipboard monitoring is disabled
+    }
 
     lastClipboardContent = await vscode.env.clipboard.readText();
 
@@ -101,6 +105,19 @@ export function disableClipboardTracking() {
     if (clipboardTrackingTimer) {
         clearInterval(clipboardTrackingTimer);
         clipboardTrackingTimer = null;
-        checkClipboardContent(); // Ensure we check the clipboard one last time to capture any final changes
+
+        // Ensure we check the clipboard one last time to capture any final changes
+        checkClipboardContent().then(() => {
+            const tabdDir = path.join(os.homedir(), '.tabd');
+            if (!fs.existsSync(tabdDir)) {
+                return;
+            }
+
+            const clipboardFilePath = path.join(tabdDir, 'latest_clipboard.json');
+            if (fs.existsSync(clipboardFilePath)) {
+                // Remove the latest clipboard file
+                fs.unlinkSync(clipboardFilePath);
+            }
+        });
     }
 }

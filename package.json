@@ -73,6 +73,11 @@
           "default": false,
           "description": "Disable all Tab'd features"
         },
+        "tabd.enableIDEClipboardMonitoring": {
+          "type": "boolean",
+          "default": true,
+          "description": "Track clipboard copies from the IDE (e.g. Ctrl+C, Cmd+C)"
+        },
         "tabd.storage": {
           "type": "string",
           "enum": [

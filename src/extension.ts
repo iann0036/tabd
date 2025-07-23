@@ -877,7 +877,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 				const currentFileContent = document.getText();
 				const currentChecksum = generateDataChecksum(currentFileContent);
 				if (currentChecksum !== fileState.checksum) {
-					console.warn(`File content has changed since Git notes data was saved. Skipping outdated data.`);
+					console.debug(`File content has changed since Git notes data was saved. Skipping outdated data.`);
 					continue;
 				}
 			}
@@ -941,7 +941,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 				const currentFileContent = document.getText();
 				const currentChecksum = generateDataChecksum(currentFileContent);
 				if (currentChecksum !== fileState.checksum) {
-					console.warn(`File content has changed since data was saved for ${fileChangeRecordPath}. Skipping outdated data.`);
+					console.debug(`File content has changed since data was saved for ${fileChangeRecordPath}. Skipping outdated data.`);
 					continue;
 				}
 			}
