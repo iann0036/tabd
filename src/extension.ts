@@ -11,6 +11,7 @@ import { triggerDecorationUpdate } from './decorators';
 import { SerializedFileState, GlobalFileState } from './types';
 import { getGitNotesNamespace, saveToGitNotes, loadFromGitNotes, getCurrentGitUser } from './git';
 import { enableClipboardTracking, disableClipboardTracking } from './clipboard';
+import { patchExtensions } from './patch';
 
 let currentUser: string = "";
 var editLock = new Mutex();
@@ -20,37 +21,13 @@ export function activate(context: vscode.ExtensionContext) {
 	// Only exclude the .tabd directory from the file explorer when using repository storage
 	const config = vscode.workspace.getConfiguration('tabd');
 	const storageType = config.get<string>('storage', 'repository');
-	
+
 	if (storageType === 'repository') {
 		const files = vscode.workspace.getConfiguration('files');
 		const exclude = files.get('exclude') as Record<string, boolean>;
 		exclude['**/.tabd'] = true;
 		files.update('exclude', exclude, vscode.ConfigurationTarget.Global);
 	}
-
-	const notifyPaste = function (d: vscode.TextDocument, ranges: readonly vscode.Range[]) {
-		return editLock.runExclusive(async () => {
-			// Check if tracking is disabled
-			const config = vscode.workspace.getConfiguration('tabd');
-			const disabled = config.get<boolean>('disabled', false);
-			if (disabled) {
-				return;
-			}
-
-			let fileState = globalFileState[fsPath(d.uri)];
-			const now = Date.now();
-			if (!fileState) {
-				fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [], loadTimestamp: now-1 };
-			}
-
-			for (const range of ranges) {
-				// Create a new range for the paste operation
-				const pasteRange = new ExtendedRange(range.start, range.end, ExtendedRangeType.Paste, now);
-				fileState.pasteRanges = fileState.pasteRanges.filter(p => p.getCreationTimestamp() > now - 400); // memory cleanup
-				fileState.pasteRanges.push(pasteRange);
-			}
-		});
-	};
 
 	const providerRegistrations = vscode.Disposable.from(
 		// Register the text editor change listener
@@ -145,27 +122,27 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 				}
 			}
-			
+
 			if (e.affectsConfiguration('tabd.storage')) {
 				// Clear global file state when storage type changes to force reload from new location
 				globalFileState = {};
-				
+
 				// Update files.exclude based on storage type
 				const config = vscode.workspace.getConfiguration('tabd');
 				const storageType = config.get<string>('storage', 'repository');
-				
+
 				if (storageType === 'repository') {
 					const files = vscode.workspace.getConfiguration('files');
 					const exclude = files.get('exclude') as Record<string, boolean>;
 					exclude['**/.tabd'] = true;
 					files.update('exclude', exclude, vscode.ConfigurationTarget.Global);
 				}
-				
+
 				// Reload file state for active editor
 				if (vscode.window.activeTextEditor) {
 					loadGlobalFileStateForDocumentFromDisk(vscode.window.activeTextEditor.document);
 					const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
-					
+
 					if (showBlameByDefault) {
 						const filePath = fsPath(vscode.window.activeTextEditor.document.uri);
 						const fileState = globalFileState[filePath];
@@ -182,14 +159,14 @@ export function activate(context: vscode.ExtensionContext) {
 			if (document.uri.scheme !== 'file' || !shouldProcessFile(document.uri)) {
 				return;
 			}
-			
+
 			// Check if tracking is disabled
 			const config = vscode.workspace.getConfiguration('tabd');
 			const disabled = config.get<boolean>('disabled', false);
 			if (disabled) {
 				return;
 			}
-			
+
 			if (globalFileState[fsPath(document.uri)]) {
 				editLock.runExclusive(() => saveFileState(document));
 			}
@@ -211,7 +188,7 @@ export function activate(context: vscode.ExtensionContext) {
 						// Move the file state to the new path
 						globalFileState[newFilePath] = globalFileState[oldFilePath];
 						delete globalFileState[oldFilePath];
-						
+
 						// Update the save path if it exists
 						if (globalFileState[newFilePath].savePath) {
 							globalFileState[newFilePath].savePath = globalFileState[newFilePath].savePath.replace(oldFilePath, newFilePath);
@@ -251,7 +228,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('tabd.toggleBlame', async () => {
 			const config = vscode.workspace.getConfiguration('tabd');
 			const currentValue = config.get<boolean>('showBlameByDefault', false);
-			
+
 			// Toggle the configuration value
 			await config.update('showBlameByDefault', !currentValue, vscode.ConfigurationTarget.Global);
 		}),
@@ -260,7 +237,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('tabd.toggleEnabled', async () => {
 			const config = vscode.workspace.getConfiguration('tabd');
 			const currentValue = config.get<boolean>('disabled', false);
-			
+
 			// Toggle the configuration value
 			await config.update('disabled', !currentValue, vscode.ConfigurationTarget.Global);
 		}),
@@ -289,16 +266,16 @@ export function activate(context: vscode.ExtensionContext) {
 			if (result === 'Clear Data') {
 				try {
 					await clearFileData(workspaceFolder, document);
-					
+
 					// Clear from memory
 					const filePath = fsPath(document.uri);
 					if (globalFileState[filePath]) {
 						globalFileState[filePath] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
 					}
-					
+
 					// Update decorations to reflect cleared state
 					triggerDecorationUpdate(document, []);
-					
+
 					vscode.window.showInformationMessage(`Tab'd data cleared for "${path.basename(document.uri.fsPath)}".`);
 				} catch (error) {
 					console.error('Failed to clear file data:', error);
@@ -324,17 +301,17 @@ export function activate(context: vscode.ExtensionContext) {
 			if (result === 'Clear All Data') {
 				try {
 					await clearWorkspaceData(workspaceFolder);
-					
+
 					// Clear from memory
 					globalFileState = {};
-					
+
 					// Update decorations for all visible editors
 					for (const editor of vscode.window.visibleTextEditors) {
 						if (editor.document.uri.scheme === 'file' && shouldProcessFile(editor.document.uri)) {
 							triggerDecorationUpdate(editor.document, []);
 						}
 					}
-					
+
 					vscode.window.showInformationMessage(`All Tab'd data cleared for workspace "${workspaceFolder.name}".`);
 				} catch (error) {
 					console.error('Failed to clear workspace data:', error);
@@ -415,12 +392,34 @@ export function activate(context: vscode.ExtensionContext) {
 					});
 				}, 100);
 				return;
+			} else if (obj._type === 'onAfterReplaceStringTool') {
+				// delay setting the most recent command
+				console.debug("Started delay");
+
+				setTimeout(() => {
+					console.log("Triggering delayed onAfterReplaceStringTool");
+					editLock.runExclusive(async () => {
+						let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
+						let updatedRanges = getUpdatedRanges(
+							fileState.changes,
+							fileState.pasteRanges,
+							mostRecentInternalCommand.changes,
+							ExtendedRangeType.AIGenerated,
+							mostRecentInternalCommand.document,
+						);
+
+						fileState.changes = updatedRanges;
+
+						triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
+					});
+				}, 100);
+				return;
 			}
-			
+
 			let d = await vscode.workspace.openTextDocument(vscode.Uri.parse(obj.filePath));
 			mostRecentInternalCommand.document = d;
 			mostRecentInternalCommand.value = obj;
-			
+
 			if (obj._type === 'onBeforeCreateFileTool') {
 				editLock.runExclusive(async () => {
 					let fileState = globalFileState[fsPath(d.uri)];
@@ -429,7 +428,7 @@ export function activate(context: vscode.ExtensionContext) {
 					if (!fileState) {
 						fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
 					} // TODO: handle else case as an unusual case
-					
+
 					updatedRanges = getUpdatedRanges(
 						fileState.changes,
 						fileState.pasteRanges,
@@ -451,15 +450,20 @@ export function activate(context: vscode.ExtensionContext) {
 				});
 			}
 		}),
+
+		// Register listener for when extensions change
+		vscode.extensions.onDidChange(() => {
+			patchExtensions();
+		}),
 	);
-	
+
 	context.subscriptions.push(providerRegistrations);
 
 	if (vscode.window.activeTextEditor) {
 		loadGlobalFileStateForDocumentFromDisk(vscode.window.activeTextEditor.document);
 		const config = vscode.workspace.getConfiguration('tabd');
 		const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
-		
+
 		if (showBlameByDefault) {
 			const filePath = fsPath(vscode.window.activeTextEditor.document.uri);
 			const fileState = globalFileState[filePath];
@@ -470,7 +474,33 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	enableClipboardTracking();
+
+	patchExtensions();
 }
+
+async function notifyPaste(d: vscode.TextDocument, ranges: readonly vscode.Range[]) {
+	return editLock.runExclusive(async () => {
+		// Check if tracking is disabled
+		const config = vscode.workspace.getConfiguration('tabd');
+		const disabled = config.get<boolean>('disabled', false);
+		if (disabled) {
+			return;
+		}
+
+		let fileState = globalFileState[fsPath(d.uri)];
+		const now = Date.now();
+		if (!fileState) {
+			fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [], loadTimestamp: now - 1 };
+		}
+
+		for (const range of ranges) {
+			// Create a new range for the paste operation
+			const pasteRange = new ExtendedRange(range.start, range.end, ExtendedRangeType.Paste, now);
+			fileState.pasteRanges = fileState.pasteRanges.filter(p => p.getCreationTimestamp() > now - 400); // memory cleanup
+			fileState.pasteRanges.push(pasteRange);
+		}
+	});
+};
 
 async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: vscode.TextDocument): Promise<void> {
 	const config = vscode.workspace.getConfiguration('tabd');
@@ -480,7 +510,7 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 		// Clear Git notes for this file
 		try {
 			const namespace = getGitNotesNamespace(workspaceFolder, document);
-			
+
 			// Get all commits with notes in this namespace
 			try {
 				const notesOutput = execSync(`git notes --ref=${namespace} list`, {
@@ -488,10 +518,10 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 					encoding: 'utf8',
 					timeout: 5000,
 				}).trim();
-				
+
 				if (notesOutput) {
 					const noteLines = notesOutput.split('\n').filter((line: string) => line.trim());
-					
+
 					for (const noteLine of noteLines) {
 						const [, commitId] = noteLine.split(' ');
 						if (commitId) {
@@ -505,7 +535,7 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 							}
 						}
 					}
-					
+
 					// Try to push the removal to origin
 					try {
 						execSync(`git push origin refs/notes/${namespace}`, {
@@ -527,11 +557,11 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 	} else {
 		// Clear traditional file-based storage (homeDirectory and repository)
 		const logDir = getLogDirectory(workspaceFolder, document);
-		
+
 		if (fs.existsSync(logDir)) {
 			const files = fs.readdirSync(logDir);
 			const jsonFiles = files.filter(file => file.endsWith('.json'));
-			
+
 			for (const file of jsonFiles) {
 				const filePath = path.join(logDir, file);
 				try {
@@ -540,7 +570,7 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 					console.warn(`Failed to delete file ${filePath}:`, error);
 				}
 			}
-			
+
 			// Try to remove the directory if it's empty
 			try {
 				if (fs.readdirSync(logDir).length === 0) {
@@ -551,7 +581,7 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 			}
 		}
 	}
-	
+
 	// Clear any temporary files for git notes storage
 	if (storageType === 'gitNotes') {
 		const tempDir = path.join(getStorageDirectory(workspaceFolder, document), 'temp');
@@ -559,7 +589,7 @@ async function clearFileData(workspaceFolder: vscode.WorkspaceFolder, document: 
 			const files = fs.readdirSync(tempDir);
 			const namespace = getGitNotesNamespace(workspaceFolder, document);
 			const relatedFiles = files.filter(file => file.startsWith(namespace));
-			
+
 			for (const file of relatedFiles) {
 				try {
 					fs.unlinkSync(path.join(tempDir, file));
@@ -585,16 +615,16 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 					encoding: 'utf8',
 					timeout: 10000,
 				}).trim();
-				
+
 				if (refsOutput) {
 					const refLines = refsOutput.split('\n').filter((line: string) => line.trim());
-					
+
 					for (const refLine of refLines) {
 						const parts = refLine.split('\t');
 						if (parts.length >= 3) {
 							const refName = parts[2]; // refs/notes/tabd__...
 							const namespace = refName.replace('refs/notes/', '');
-							
+
 							try {
 								// Remove all notes in this namespace
 								const notesOutput = execSync(`git notes --ref=${namespace} list`, {
@@ -602,10 +632,10 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 									encoding: 'utf8',
 									timeout: 5000,
 								}).trim();
-								
+
 								if (notesOutput) {
 									const noteLines = notesOutput.split('\n').filter((line: string) => line.trim());
-									
+
 									for (const noteLine of noteLines) {
 										const [, commitId] = noteLine.split(' ');
 										if (commitId) {
@@ -620,7 +650,7 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 										}
 									}
 								}
-								
+
 								// Try to push the removal to origin
 								try {
 									execSync(`git push origin refs/notes/${namespace}`, {
@@ -647,7 +677,7 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 	} else {
 		// Clear traditional file-based storage (homeDirectory and repository)
 		const storageDir = getStorageDirectory(workspaceFolder, { uri: workspaceFolder.uri } as vscode.TextDocument);
-		
+
 		if (fs.existsSync(storageDir)) {
 			try {
 				// Remove the entire storage directory recursively
@@ -658,7 +688,7 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 			}
 		}
 	}
-	
+
 	// Clear git notes storage temp directory
 	if (storageType === 'gitNotes') {
 		const storageDir = getStorageDirectory(workspaceFolder, { uri: workspaceFolder.uri } as vscode.TextDocument);
@@ -672,7 +702,7 @@ async function clearWorkspaceData(workspaceFolder: vscode.WorkspaceFolder): Prom
 	}
 }
 
-export function deactivate() {}
+export function deactivate() { }
 
 async function saveFileState(document: vscode.TextDocument): Promise<void> {
 	// Save the current state of the file
@@ -731,7 +761,7 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 		// Check if Git is initialized at the workspace root
 		const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
 		const isGitRepo = fs.existsSync(gitPath);
-		
+
 		if (!isGitRepo) {
 			console.warn('No Git repository found. Skipping file state save.');
 			return;
@@ -740,7 +770,7 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 		try {
 			const namespace = getGitNotesNamespace(workspaceFolder, document);
 			saveToGitNotes(workspaceFolder, document, dataToSave, namespace);
-			
+
 			globalFileState[fsPath(document.uri)] = fileState;
 		} catch (error) {
 			console.error('Failed to save to Git notes:', error);
@@ -758,13 +788,13 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 	if (storageType === 'repository') {
 		const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
 		const isGitRepo = fs.existsSync(gitPath);
-		
+
 		if (!isGitRepo) {
 			console.warn('No Git repository found. Skipping file state save.');
 			return;
 		}
 	}
-	
+
 	// Get the appropriate storage directory
 	const baseStorageDir = getStorageDirectory(workspaceFolder, document);
 	if (!fs.existsSync(baseStorageDir)) {
@@ -781,7 +811,7 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 	if (fs.existsSync(fileChangeRecordPath)) {
 		throw new Error(`File change record already exists at ${fileChangeRecordPath}. This should not happen!`);
 	}
-	
+
 	// Write the file state to a JSON file with checksum
 	fs.writeFileSync(fileChangeRecordPath, JSON.stringify(dataToSave));
 
@@ -815,7 +845,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 	// Check is Git is initialized at the workspace root (required for repository and gitnotes storage)
 	const config = vscode.workspace.getConfiguration('tabd');
 	const storageType = config.get<string>('storage', 'repository');
-	
+
 	if (storageType === 'repository' || storageType === 'gitNotes') {
 		// Set the current user if not already set
 		if (currentUser === "") {
@@ -824,7 +854,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 
 		const gitPath = path.join(workspaceFolder.uri.fsPath, '.git');
 		const isGitRepo = fs.existsSync(gitPath);
-		
+
 		if (!isGitRepo) {
 			return;
 		}
@@ -834,9 +864,9 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 	if (storageType === 'gitNotes') {
 		const namespace = getGitNotesNamespace(workspaceFolder, document);
 		const noteData = loadFromGitNotes(workspaceFolder, document, namespace);
-		
+
 		let updatedRanges: ExtendedRange[] = [];
-		
+
 		for (const fileState of noteData) {
 			if (fileState.version !== 1) {
 				continue; // Unsupported version
@@ -851,7 +881,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 					continue;
 				}
 			}
-			
+
 			const newChanges = fileState.changes.map(change => {
 				const options = new ExtendedRangeOptions();
 				options.pasteUrl = change.pasteUrl || "";
@@ -873,7 +903,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 
 			updatedRanges = mergeRangesSequentially(updatedRanges, newChanges);
 		}
-		
+
 		globalFileState[filePath].changes = updatedRanges;
 		return;
 	}
@@ -888,7 +918,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 	const fileChangeRecords = fs.readdirSync(fileChangeRecordDir)
 		.filter(file => file.endsWith('.json'))
 		.map(file => path.join(fileChangeRecordDir, file));
-	
+
 	if (fileChangeRecords.length === 0) {
 		return; // No file state found
 	}
@@ -915,7 +945,7 @@ function loadGlobalFileStateForDocumentFromDisk(document: vscode.TextDocument | 
 					continue;
 				}
 			}
-			
+
 			const newChanges = fileState.changes.map(change => {
 				const options = new ExtendedRangeOptions();
 				options.pasteUrl = change.pasteUrl || "";

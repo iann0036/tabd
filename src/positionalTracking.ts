@@ -160,13 +160,13 @@ const getUpdatedRanges = (
 
             const options = new ExtendedRangeOptions();
             try {
-                if (aiInfo._type === 'onBeforeInsertEditTool') {
+                if (aiInfo._type === 'onBeforeInsertEditTool' || aiInfo._type === 'onBeforeReplaceStringTool') {
                     if (!aiInfo.insertText || aiInfo.insertText.trim().length === 0) {
                         aiInfo.insertText = '';
                     }
 
                     if (!aiInfo.oldText) {
-                        console.error("AI insertText is set but oldText is not set, this is unexpected behavior for onBeforeInsertEditTool.");
+                        console.error(`AI insertText is set but oldText is not set, this is unexpected behavior for ${aiInfo._type}.`);
                         continue;
                     }
 
@@ -220,8 +220,9 @@ const getUpdatedRanges = (
                             text: aiInfo.insertText.substring(startOffset, endOffset),
                         }
                     ];
+                    console.debug("Applied custom changes with string", aiInfo.insertText.substring(startOffset, endOffset));
                     continue;
-                } else if (aiInfo._type === 'onBeforeApplyPatchTool' || aiInfo._type === 'onBeforeCreateFileTool' || aiInfo._type === 'onBeforeReplaceStringTool') {
+                } else if (aiInfo._type === 'onBeforeApplyPatchTool' || aiInfo._type === 'onBeforeCreateFileTool') {
                     mostRecentInternalCommand.document = document; // TODO: verify this is what it was
                     mostRecentInternalCommand.changes = changes;
                     continue;
