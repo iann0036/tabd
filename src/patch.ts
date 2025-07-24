@@ -8,11 +8,13 @@ class ExtensionMetadata {
     name: string;
     displayName: string;
     publisher: string;
+    version?: string;
 
     constructor(data: any) {
         this.name = data.name || '';
         this.displayName = data.displayName || '';
         this.publisher = data.publisher || '';
+        this.version = data.version || undefined;
     }
     
     getDisplayName(): string {
@@ -60,6 +62,27 @@ function getVSCodeExtensionsPath(): string {
 function isSupportedFile(filename: string): boolean {
     const ext = path.extname(filename).toLowerCase();
     return ['.js', '.ts', '.mjs', '.cjs', '.jsx', '.tsx'].includes(ext);
+}
+
+function compareVersions(version1: string, version2: string): number {
+    const v1parts = version1.split('.').map(Number);
+    const v2parts = version2.split('.').map(Number);
+    
+    const maxLength = Math.max(v1parts.length, v2parts.length);
+    
+    for (let i = 0; i < maxLength; i++) {
+        const v1part = v1parts[i] || 0;
+        const v2part = v2parts[i] || 0;
+        
+        if (v1part > v2part) {
+            return 1;
+        }
+        if (v1part < v2part) {
+            return -1;
+        }
+    }
+    
+    return 0;
 }
 
 function extractFirstVariableFromParams(params: string): string {
@@ -604,7 +627,7 @@ async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | nu
             return;
         }
         
-        if (extensionMeta && extensionMeta.publisher.toLowerCase() === 'github' && extensionMeta.name.toLowerCase() === 'copilot-chat' && filePath.endsWith('extension.js')) {
+        if (extensionMeta && extensionMeta.publisher.toLowerCase() === 'github' && extensionMeta.name.toLowerCase() === 'copilot-chat' && extensionMeta.version && compareVersions(extensionMeta.version, '0.30.0') >= 0 && filePath.endsWith('extension.js')) {
             // Special handling for GitHub Copilot Chat
             await patchGitHubCopilotChat(filePath);
             return; // TODO: allow continue with re-read in
