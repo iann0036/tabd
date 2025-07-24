@@ -116,7 +116,10 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@vscode/tree-sitter-wasm": "^0.1.4",
     "async-mutex": "^0.5.0",
-    "vscode-uri": "^3.1.0"
+    "tree-sitter-javascript": "^0.23.1",
+    "vscode-uri": "^3.1.0",
+    "web-tree-sitter": "^0.25.8"
   }
 }

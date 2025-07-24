@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { Parser, Language, Query } from 'web-tree-sitter';
 
 class ExtensionMetadata {
     name: string;
@@ -82,6 +83,516 @@ function extractFirstVariableFromParams(params: string): string {
     return matches[1];
 }
 
+async function patchGitHubCopilotChat(filePath: string): Promise<void> {
+    await Parser.init();
+    const parser = new Parser();
+    const JavaScript = await Language.load(path.join(__dirname, 'node_modules', 'tree-sitter-javascript', 'tree-sitter-javascript.wasm'));
+    parser.setLanguage(JavaScript);
+    let sourceCode = await fs.readFile(filePath, 'utf8');
+    const tree = parser.parse(sourceCode);
+
+    let inserts = [];
+
+    {
+        // apply_patch tool
+        const queryPattern = `
+            (class_body
+                member: (class_static_block
+                    body: (statement_block
+                        (expression_statement
+                            (assignment_expression
+                                left: (member_expression) @static_lhs
+                                right: (string
+                                    (string_fragment) @static_rhs
+                                )
+                            )
+                            (#eq? @static_lhs "this.toolName")
+                            (#eq? @static_rhs "apply_patch")
+                        )
+                    )
+                )
+                member: (method_definition
+                    name: (property_identifier) @method_name
+                    parameters: (formal_parameters
+                        (identifier) @optionsarg
+                        (identifier)
+                    )
+                    body: (statement_block
+                        (try_statement
+                            body: (statement_block
+                                (for_in_statement
+                                    left: (array_pattern
+                                      (identifier) @arg2
+                                      (identifier)
+                                    )
+                                    right: (identifier)
+                                    body: (statement_block
+                                        (if_statement
+                                            alternative: (else_clause
+                                                (statement_block
+                                                    (lexical_declaration
+                                                        (variable_declarator
+                                                            name: (identifier) @arg1
+                                                            value: (ternary_expression
+                                                                
+                                                            )
+                                                        )
+                                                    ) @on_before_after_this
+                                                    (for_in_statement)
+                                                ) @on_after_at_end_of_this
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+                (#eq? @method_name "invoke")
+            ) @class
+        `;
+        if (!tree) {
+            console.error('Failed to parse source code.');
+            return;
+        }
+        
+        const query = new Query(JavaScript, queryPattern);
+        const matches = query.matches(tree.rootNode);
+        for (const match of matches) {
+            let index1 = 0;
+            let index2 = 0;
+            let arg1 = '';
+            let arg2 = '';
+            let optionsarg = '';
+
+            for (const capture of match.captures) {
+                const node = capture.node;
+                const text = node.text || sourceCode.slice(node.startIndex, node.endIndex);
+                if (capture.name === 'on_before_after_this') {
+                    index1 = node.endIndex;
+                }
+                if (capture.name === 'on_after_at_end_of_this') {
+                    index2 = node.endIndex - 1; // Adjust for the closing brace
+                }
+                if (capture.name === 'arg1') {
+                    arg1 = text;
+                }
+                if (capture.name === 'arg2') {
+                    arg2 = text;
+                }
+                if (capture.name === 'optionsarg') {
+                    optionsarg = text;
+                }
+            }
+
+            if (index1 === 0 || index2 === 0 || !arg1 || !arg2) {
+                console.error('Failed to find required captures.');
+                return;
+            }
+
+            inserts.push({
+                contents: `/*tabd*/;require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                    "insertText": ${arg1}.map(edit => edit.newText).join('\n'),
+                    "filePath": ${arg2}.toString(),
+                    "_extensionName": "GitHub Copilot Chat",
+                    "_timestamp": new Date().getTime(),
+                    "_modelId": ${optionsarg}.model?.id,
+                    "_type": "onBeforeApplyPatchTool",
+                }));/**/ `,
+                offset: index1,
+            });
+            inserts.push({
+                contents: `/*tabd*/,require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                    "insertText": ${arg1}.map(edit => edit.newText).join('\n'),
+                    "filePath": ${arg2}.toString(),
+                    "_extensionName": "GitHub Copilot Chat",
+                    "_timestamp": new Date().getTime(),
+                    "_modelId": ${optionsarg}.model?.id,
+                    "_type": "onAfterApplyPatchTool",
+                }))/**/ `,
+                offset: index2,
+            });
+        }
+    }
+
+    {
+        // create_file tool
+        const queryPattern = `
+            (class_body
+                member: (class_static_block
+                    body: (statement_block
+                        (expression_statement
+                            (assignment_expression
+                                left: (member_expression) @static_lhs
+                                right: (string
+                                    (string_fragment) @static_rhs
+                                )
+                            )
+                            (#eq? @static_lhs "this.toolName")
+                            (#eq? @static_rhs "create_file")
+                        )
+                    )
+                )
+                member: (method_definition
+                    name: (property_identifier) @method_name
+                    parameters: (formal_parameters
+                        (identifier) @optionsarg
+                        (identifier)
+                    )
+                    body: (statement_block
+                        (lexical_declaration
+                            (variable_declarator
+                                name: (identifier) @arg1
+                            )
+                        )
+                        (if_statement
+                            alternative: (else_clause
+                                (statement_block
+                                    (return_statement
+                                        (sequence_expression
+                                            (await_expression)
+                                            (call_expression)
+                                            (new_expression) @on_after_before_this
+                                        ) @on_before_before_this
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+                (#eq? @method_name "invoke")
+            ) @class
+        `;
+        if (!tree) {
+            console.error('Failed to parse source code.');
+            return;
+        }
+        
+        const query = new Query(JavaScript, queryPattern);
+        const matches = query.matches(tree.rootNode);
+        for (const match of matches) {
+            let index1 = 0;
+            let index2 = 0;
+            let arg1 = '';
+            let optionsarg = '';
+
+            for (const capture of match.captures) {
+                const node = capture.node;
+                const text = node.text || sourceCode.slice(node.startIndex, node.endIndex);
+                if (capture.name === 'on_before_before_this') {
+                    index1 = node.startIndex;
+                }
+                if (capture.name === 'on_after_before_this') {
+                    index2 = node.startIndex;
+                }
+                if (capture.name === 'arg1') {
+                    arg1 = text;
+                }
+                if (capture.name === 'optionsarg') {
+                    optionsarg = text;
+                }
+            }
+
+            if (index1 === 0 || index2 === 0 || !arg1) {
+                console.error('Failed to find required captures.');
+                return;
+            }
+
+            inserts.push({
+                contents: `/*tabd*/require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                    "insertText": ${arg1},
+                    "filePath": ${optionsarg}.input.filePath,
+                    "_extensionName": "GitHub Copilot Chat",
+                    "_timestamp": new Date().getTime(),
+                    "_modelId": ${optionsarg}.model?.id,
+                    "_type": "onBeforeCreateFileTool",
+                })),/**/ `,
+                offset: index1,
+            });
+            inserts.push({
+                contents: `/*tabd*/require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                    "insertText": ${arg1},
+                    "filePath": ${optionsarg}.input.filePath,
+                    "_extensionName": "GitHub Copilot Chat",
+                    "_timestamp": new Date().getTime(),
+                    "_modelId": ${optionsarg}.model?.id,
+                    "_type": "onAfterCreateFileTool",
+                })),/**/ `,
+                offset: index2,
+            });
+
+            break;
+        }
+    }
+
+    {
+        // replace_string tool
+        const queryPattern = `
+            (class_body
+                member: (class_static_block
+                    body: (statement_block
+                        (expression_statement
+                            (assignment_expression
+                                left: (member_expression) @static_lhs
+                                right: (string
+                                    (string_fragment) @static_rhs
+                                )
+                            )
+                            (#eq? @static_lhs "this.toolName")
+                            (#eq? @static_rhs "replace_string_in_file")
+                        )
+                    )
+                )
+                member: (method_definition
+                    name: (property_identifier) @method_name
+                    parameters: (formal_parameters
+                        (identifier) @optionsarg
+                        (identifier)
+                    )
+                    body: (statement_block
+                        (if_statement
+                            consequence: (statement_block
+                                (lexical_declaration
+                                    (variable_declarator
+                                        name: (identifier) @arg3
+                                        value: (call_expression)
+                                    )
+                                )
+                                (try_statement
+                                    body: (statement_block
+                                        .
+                                        (lexical_declaration
+                                            (variable_declarator
+                                                value: (await_expression
+                                                    (call_expression
+                                                        arguments: (arguments
+                                                            (identifier)
+                                                            (call_expression) @arg1
+                                                            (call_expression) @arg2
+                                                            (identifier)
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        ) @on_before_before_this
+                                        (if_statement
+                                            condition: (parenthesized_expression
+                                                (sequence_expression
+                                                    (binary_expression) @on_after_before_this
+                                                    .
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+                (#eq? @method_name "invoke")
+            ) @class
+        `;
+        if (!tree) {
+            console.error('Failed to parse source code.');
+            return;
+        }
+        
+        const query = new Query(JavaScript, queryPattern);
+        const matches = query.matches(tree.rootNode);
+        for (const match of matches) {
+            let index1 = 0;
+            let index2 = 0;
+            let arg1 = '';
+            let arg2 = '';
+            let arg3 = '';
+            let optionsarg = '';
+
+            for (const capture of match.captures) {
+                const node = capture.node;
+                const text = node.text || sourceCode.slice(node.startIndex, node.endIndex);
+                if (capture.name === 'on_before_before_this') {
+                    index1 = node.startIndex;
+                }
+                if (capture.name === 'on_after_before_this') {
+                    index2 = node.startIndex;
+                }
+                if (capture.name === 'arg1') {
+                    arg1 = text;
+                }
+                if (capture.name === 'arg2') {
+                    arg2 = text;
+                }
+                if (capture.name === 'arg3') {
+                    arg3 = text;
+                }
+                if (capture.name === 'optionsarg') {
+                    optionsarg = text;
+                }
+            }
+
+            if (index1 === 0 || index2 === 0 || !arg1 || !arg2) {
+                console.error('Failed to find required captures.');
+                return;
+            }
+
+            inserts.push({
+                contents: `/*tabd*/;require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                    "insertText": ${arg1},
+                    "filePath": ${arg3},
+                    "oldText": ${arg2},
+                    "_extensionName": "GitHub Copilot Chat",
+                    "_timestamp": new Date().getTime(),
+                    "_modelId": ${optionsarg}.model?.id,
+                    "_type": "onBeforeReplaceStringTool",
+                }));/**/ `,
+                offset: index1,
+            });
+            inserts.push({
+                contents: `/*tabd*/require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                    "insertText": ${arg1},
+                    "filePath": ${arg3},
+                    "oldText": ${arg2},
+                    "_extensionName": "GitHub Copilot Chat",
+                    "_timestamp": new Date().getTime(),
+                    "_modelId": ${optionsarg}.model?.id,
+                    "_type": "onAfterReplaceStringTool",
+                })),/**/ `,
+                offset: index2,
+            });
+
+            break;
+        }
+    }
+
+    {
+        // insert_edit tool
+        const queryPattern = `
+            (class_body
+                member: (class_static_block
+                    body: (statement_block
+                        (expression_statement
+                            (assignment_expression
+                                left: (member_expression) @static_lhs
+                                right: (string
+                                    (string_fragment) @static_rhs
+                                )
+                            )
+                            (#eq? @static_lhs "this.toolName")
+                            (#eq? @static_rhs "insert_edit_into_file")
+                        )
+                    )
+                )
+                member: (method_definition
+                    name: (property_identifier) @method_name
+                    parameters: (formal_parameters
+                        (identifier) @optionsarg
+                        (identifier)
+                    )
+                    body: (statement_block
+                        (expression_statement
+                            (await_expression
+                                (call_expression
+                                    function: (member_expression
+                                      object: (member_expression
+                                        object: (this)
+                                        property: (property_identifier) @toolsservicestr
+                                      )
+                                      property: (property_identifier) @invoketoolstr
+                                    )
+                                  (#eq? @toolsservicestr "toolsService")
+                                  (#eq? @invoketoolstr "invokeTool")
+                                )
+                            )
+                        ) @on_before_before_this @on_after_after_this
+                    )
+                )
+                (#eq? @method_name "invoke")
+            ) @class
+        `;
+        if (!tree) {
+            console.error('Failed to parse source code.');
+            return;
+        }
+        
+        const query = new Query(JavaScript, queryPattern);
+        const matches = query.matches(tree.rootNode);
+        for (const match of matches) {
+            let index1 = 0;
+            let index2 = 0;
+            let optionsarg = '';
+
+            for (const capture of match.captures) {
+                const node = capture.node;
+                const text = node.text || sourceCode.slice(node.startIndex, node.endIndex);
+                if (capture.name === 'on_before_before_this') {
+                    index1 = node.startIndex;
+                }
+                if (capture.name === 'on_after_after_this') {
+                    index2 = node.endIndex;
+                }
+                if (capture.name === 'optionsarg') {
+                    optionsarg = text;
+                }
+            }
+
+            if (index1 === 0 || index2 === 0) {
+                console.error('Failed to find required captures.');
+                return;
+            }
+
+            inserts.push({
+                contents: `/*tabd*/;require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                    "insertText": ${optionsarg}.input.code,
+                    "oldText": require('fs').readFileSync(${optionsarg}.input.filePath, 'utf8'),
+                    "filePath": ${optionsarg}.input.filePath,
+                    "_extensionName": "GitHub Copilot Chat",
+                    "_timestamp": new Date().getTime(),
+                    "_modelId": ${optionsarg}.model?.id,
+                    "_explanation": ${optionsarg}.input.explanation,
+                    "_type": "onBeforeInsertEditTool",
+                }));/**/ `,
+                offset: index1,
+            });
+            inserts.push({
+                contents: `/*tabd*/;require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                    "insertText": ${optionsarg}.input.code,
+                    "oldText": require('fs').readFileSync(${optionsarg}.input.filePath, 'utf8'),
+                    "filePath": ${optionsarg}.input.filePath,
+                    "_extensionName": "GitHub Copilot Chat",
+                    "_timestamp": new Date().getTime(),
+                    "_modelId": ${optionsarg}.model?.id,
+                    "_explanation": ${optionsarg}.input.explanation,
+                    "_type": "onAfterInsertEditTool",
+                }));/**/ `,
+                offset: index2,
+            });
+        }
+    }
+
+    if (inserts.length === 0) {
+        console.log('No matches found for the query.');
+        return;
+    }
+
+    // Sort inserts by offset in descending order to avoid index shifting issues
+    inserts.sort((a, b) => b.offset - a.offset);
+
+    // Trim newlines
+    inserts.map(insert => { insert.contents = insert.contents.split("\n").map(s => s.trim()).join(' '); return insert; });
+
+    // Apply the inserts to the source code
+    for (const insert of inserts) {
+        sourceCode = sourceCode.slice(0, insert.offset) + insert.contents + sourceCode.slice(insert.offset);
+    }
+
+    // Write the modified source code back to the file
+    try {
+        await fs.writeFile('/tmp/extension-mypatch.js', sourceCode, 'utf8');
+    } catch (error) {
+        console.error(`Failed to write to file ${filePath}:`, error);
+    }
+}
+
 async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | null): Promise<void> {
     try {
         const content = await fs.readFile(filePath, 'utf8');
@@ -91,6 +602,11 @@ async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | nu
         if (originalContent.includes('/*tabd*/')) {
             //console.debug(`Patch already exists in ${filePath}, skipping`);
             return;
+        }
+        
+        if (extensionMeta && extensionMeta.publisher.toLowerCase() === 'github' && extensionMeta.name.toLowerCase() === 'copilot-chat' && filePath.endsWith('extension.js')) {
+            // Special handling for GitHub Copilot Chat
+            await patchGitHubCopilotChat(filePath);
         }
 
         // Pattern to find the function call with opening brace - handle minified code
