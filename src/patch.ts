@@ -645,8 +645,8 @@ async function patchGitHubCopilotChat(filePath: string): Promise<void> {
 
 async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | null): Promise<void> {
     try {
-        const content = await fs.readFile(filePath, 'utf8');
-        const originalContent = content;
+        let content = await fs.readFile(filePath, 'utf8');
+        let originalContent = content;
 
         // Check if patch is already present
         if (originalContent.includes('/*tabd*/')) {
@@ -657,7 +657,9 @@ async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | nu
         if (extensionMeta && extensionMeta.publisher.toLowerCase() === 'github' && extensionMeta.name.toLowerCase() === 'copilot-chat' && extensionMeta.version && compareVersions(extensionMeta.version, '0.30.0') >= 0 && filePath.endsWith('extension.js')) {
             // Special handling for GitHub Copilot Chat
             await patchGitHubCopilotChat(filePath);
-            return; // TODO: allow continue with re-read in
+            // Re-read the file after patching
+            content = await fs.readFile(filePath, 'utf8');
+            originalContent = content;
         }
 
         // Pattern to find the function call with opening brace - handle minified code
@@ -714,7 +716,7 @@ async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | nu
             }
 
             // Create an enhanced data object that includes both the original data and extension metadata
-            const patchCode = `/*tabd*/try{require('vscode').commands.executeCommand('tabd._internal',JSON.stringify({...${firstVar},'_extensionName':'${extensionName}','_timestamp':new Date().getTime(),'_type':'inlineCompletion'}));}catch(e){}`;
+            const patchCode = `/*tabd*/try{require('vscode').commands.executeCommand('tabd._internal',JSON.stringify({...${firstVar},'_extensionName':'${extensionName}','_timestamp':new Date().getTime(),'_type':'inlineCompletion'}));}catch(e){}/**/`;
 
             // Find the opening brace position within the match
             const bracePos = matchInfo.fullMatch.indexOf('{');
