@@ -74,6 +74,7 @@ const getUpdatedRanges = (
 ): ExtendedRange[] => {
     let toUpdateRanges: (ExtendedRange | null)[] = [...ranges];
     let additionalRanges: ExtendedRange[] = [];
+    let clearMostRecentInternalCommandAtEnd = false;
 
     console.debug("getUpdatedRanges called with reason:", reason, "and changes:", JSON.stringify(changes), "and mostRecentInternalCommand:", mostRecentInternalCommand);
 
@@ -147,9 +148,7 @@ const getUpdatedRanges = (
 
             isAI = true;
 
-            mostRecentInternalCommand.value = { "_type": "initial" };
-            mostRecentInternalCommand.document = null;
-            mostRecentInternalCommand.changes = [];
+            clearMostRecentInternalCommandAtEnd = true;
         } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
             additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
         } else if (change.text.trim().length <= 1 && aiInfo._type !== 'onBeforeInsertEditTool' && aiInfo._type !== 'onBeforeApplyPatchTool' && aiInfo._type !== 'onBeforeCreateFileTool' && aiInfo._type !== 'onBeforeReplaceStringTool' && aiInfo._type !== 'onAfterReplaceStringTool' && aiInfo._type !== 'onAfterApplyPatchTool') {
@@ -253,9 +252,7 @@ const getUpdatedRanges = (
                     isAI = true;
 
                     if (aiInfo._type === 'onAfterReplaceStringTool' || aiInfo._type === 'onAfterApplyPatchTool') { // use only once
-                        mostRecentInternalCommand.value = { "_type": "initial" };
-                        mostRecentInternalCommand.document = null;
-                        mostRecentInternalCommand.changes = [];
+                        clearMostRecentInternalCommandAtEnd = true;
                     }
                 }
             } catch (error) {
@@ -392,6 +389,12 @@ const getUpdatedRanges = (
     // Add additional ranges
     if (additionalRanges.length > 0) {
         updatedRanges = updatedRanges.concat(additionalRanges);
+    }
+
+    if (clearMostRecentInternalCommandAtEnd) {
+        mostRecentInternalCommand.value = { "_type": "initial" };
+        mostRecentInternalCommand.document = null;
+        mostRecentInternalCommand.changes = [];
     }
 
     return updatedRanges;
