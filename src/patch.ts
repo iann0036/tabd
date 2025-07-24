@@ -86,7 +86,7 @@ function extractFirstVariableFromParams(params: string): string {
 async function patchGitHubCopilotChat(filePath: string): Promise<void> {
     await Parser.init();
     const parser = new Parser();
-    const JavaScript = await Language.load(path.join(__dirname, 'node_modules', 'tree-sitter-javascript', 'tree-sitter-javascript.wasm'));
+    const JavaScript = await Language.load(path.join(__dirname, '..', 'node_modules', 'tree-sitter-javascript', 'tree-sitter-javascript.wasm'));
     parser.setLanguage(JavaScript);
     let sourceCode = await fs.readFile(filePath, 'utf8');
     const tree = parser.parse(sourceCode);
@@ -587,7 +587,7 @@ async function patchGitHubCopilotChat(filePath: string): Promise<void> {
 
     // Write the modified source code back to the file
     try {
-        await fs.writeFile('/tmp/extension-mypatch.js', sourceCode, 'utf8');
+        await fs.writeFile(filePath, sourceCode, 'utf8');
     } catch (error) {
         console.error(`Failed to write to file ${filePath}:`, error);
     }
@@ -607,6 +607,7 @@ async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | nu
         if (extensionMeta && extensionMeta.publisher.toLowerCase() === 'github' && extensionMeta.name.toLowerCase() === 'copilot-chat' && filePath.endsWith('extension.js')) {
             // Special handling for GitHub Copilot Chat
             await patchGitHubCopilotChat(filePath);
+            return; // TODO: allow continue with re-read in
         }
 
         // Pattern to find the function call with opening brace - handle minified code
