@@ -263,14 +263,41 @@ async function patchGitHubCopilotChat(filePath: string): Promise<void> {
                         (identifier)
                     )
                     body: (statement_block
-                        (lexical_declaration
-                            (variable_declarator
-                                name: (identifier) @arg1
-                            )
-                        )
                         (if_statement
                             alternative: (else_clause
                                 (statement_block
+                                    (lexical_declaration
+                                        (variable_declarator
+                                            name: (identifier) @arg1
+                                            value: (call_expression
+                                                function: (identifier)
+                                                arguments: (arguments
+                                                    (member_expression
+                                                        object: (member_expression
+                                                            object: (identifier)
+                                                            property: (property_identifier) @inputstr
+                                                        )
+                                                        property: (property_identifier) @contentstr
+                                                    )
+                                                    (member_expression
+                                                        object: (identifier)
+                                                        property: (property_identifier) @languageidstr
+                                                    )
+                                                    (member_expression
+                                                        object: (member_expression
+                                                            object: (identifier)
+                                                            property: (property_identifier) @inputstr
+                                                        )
+                                                        property: (property_identifier) @filepathstr
+                                                    )
+                                                )
+                                                (#eq? @inputstr "input")
+                                                (#eq? @contentstr "content")
+                                                (#eq? @filepathstr "filePath")
+                                                (#eq? @languageidstr "languageId")
+                                            )
+                                        )
+                                    )
                                     (return_statement
                                         (sequence_expression
                                             (await_expression)
@@ -460,9 +487,9 @@ async function patchGitHubCopilotChat(filePath: string): Promise<void> {
 
             inserts.push({
                 contents: `/*tabd*/;require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
-                    "insertText": ${arg1},
+                    "insertText": ${arg2},
                     "filePath": ${arg3},
-                    "oldText": ${arg2},
+                    "oldText": ${arg1},
                     "_extensionName": "GitHub Copilot Chat",
                     "_timestamp": new Date().getTime(),
                     "_modelId": ${optionsarg}.model?.id,
@@ -472,9 +499,9 @@ async function patchGitHubCopilotChat(filePath: string): Promise<void> {
             });
             inserts.push({
                 contents: `/*tabd*/require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
-                    "insertText": ${arg1},
+                    "insertText": ${arg2},
                     "filePath": ${arg3},
-                    "oldText": ${arg2},
+                    "oldText": ${arg1},
                     "_extensionName": "GitHub Copilot Chat",
                     "_timestamp": new Date().getTime(),
                     "_modelId": ${optionsarg}.model?.id,

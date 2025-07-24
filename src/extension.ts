@@ -331,79 +331,93 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Register the command to gather events from other extensions
 		vscode.commands.registerCommand('tabd._internal', async (args) => {
-			// Check if tracking is disabled
-			const config = vscode.workspace.getConfiguration('tabd');
-			const disabled = config.get<boolean>('disabled', false);
-			if (disabled) {
-				return;
-			}
-
-			const obj = JSON.parse(String(args));
-
-			if (!obj || !obj._type) {
-				console.warn("Received invalid internal command:", obj);
-				return;
-			}
-
-			if (!obj.filePath) {
-				if (obj.command.arguments && obj.command.arguments[0] && obj.command.arguments[0].uri) {
-					obj.filePath = fsPath(vscode.Uri.parse(obj.command.arguments[0].uri));
-				} else {
-					console.warn("Received internal command without filePath:", obj);
+			try {
+				// Check if tracking is disabled
+				const config = vscode.workspace.getConfiguration('tabd');
+				const disabled = config.get<boolean>('disabled', false);
+				if (disabled) {
 					return;
 				}
-			}
 
-			if (obj._type === 'onAfterInsertEditTool') {
-				editLock.runExclusive(async () => {
-					let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
-					let updatedRanges = getUpdatedRanges(
-						fileState.changes,
-						fileState.pasteRanges,
-						mostRecentInternalCommand.changes,
-						ExtendedRangeType.AIGenerated,
-						mostRecentInternalCommand.document,
-					);
+				const obj = JSON.parse(String(args));
 
-					fileState.changes = updatedRanges;
+				if (!obj || !obj._type) {
+					console.warn("Received invalid internal command:", obj);
+					return;
+				}
 
-					triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
-				});
-				return;
-			}
+				if (obj && obj.insertText && typeof obj.insertText !== 'string') {
+					console.warn("Received internal command with invalid insertText:", obj);
+					return;
+				}
 
-			let d = await vscode.workspace.openTextDocument(vscode.Uri.parse(obj.filePath));
-			mostRecentInternalCommand.document = d;
-			mostRecentInternalCommand.value = obj;
+				if (!obj.filePath) {
+					if (obj.command.arguments && obj.command.arguments[0] && obj.command.arguments[0].uri) {
+						obj.filePath = fsPath(vscode.Uri.parse(obj.command.arguments[0].uri));
+					} else {
+						console.warn("Received internal command without filePath:", obj);
+						return;
+					}
+				}
 
-			if (obj._type === 'onBeforeCreateFileTool') {
-				editLock.runExclusive(async () => {
-					let fileState = globalFileState[fsPath(d.uri)];
-					let updatedRanges: ExtendedRange[];
+				if (typeof obj.filePath !== 'string') {
+					console.warn("Received internal command with invalid filePath:", obj);
+					return;
+				}
 
-					if (!fileState) {
-						fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
-					} // TODO: handle else case as an unusual case
+				if (obj._type === 'onAfterInsertEditTool') {
+					editLock.runExclusive(async () => {
+						let fileState = globalFileState[fsPath(mostRecentInternalCommand.document.uri)];
+						let updatedRanges = getUpdatedRanges(
+							fileState.changes,
+							fileState.pasteRanges,
+							mostRecentInternalCommand.changes,
+							ExtendedRangeType.AIGenerated,
+							mostRecentInternalCommand.document,
+						);
 
-					updatedRanges = getUpdatedRanges(
-						fileState.changes,
-						fileState.pasteRanges,
-						[
-							{
-								range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0)),
-								rangeOffset: 0, // unused
-								rangeLength: 0, // unused
-								text: obj.insertText,
-							}
-						],
-						undefined,
-						d,
-					);
+						fileState.changes = updatedRanges;
 
-					fileState.changes = updatedRanges;
+						triggerDecorationUpdate(mostRecentInternalCommand.document, updatedRanges);
+					});
+					return;
+				}
 
-					triggerDecorationUpdate(d, updatedRanges);
-				});
+				let d = await vscode.workspace.openTextDocument(vscode.Uri.parse(obj.filePath));
+				mostRecentInternalCommand.document = d;
+				mostRecentInternalCommand.value = obj;
+
+				if (obj._type === 'onBeforeCreateFileTool') {
+					editLock.runExclusive(async () => {
+						let fileState = globalFileState[fsPath(d.uri)];
+						let updatedRanges: ExtendedRange[];
+
+						if (!fileState) {
+							fileState = globalFileState[fsPath(d.uri)] = { changes: [], pasteRanges: [], loadTimestamp: Date.now() - 1 };
+						} // TODO: handle else case as an unusual case
+
+						updatedRanges = getUpdatedRanges(
+							fileState.changes,
+							fileState.pasteRanges,
+							[
+								{
+									range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0)),
+									rangeOffset: 0, // unused
+									rangeLength: 0, // unused
+									text: obj.insertText,
+								}
+							],
+							undefined,
+							d,
+						);
+
+						fileState.changes = updatedRanges;
+
+						triggerDecorationUpdate(d, updatedRanges);
+					});
+				}
+			} catch (error) {
+				console.error("Error processing internal command:", error);
 			}
 		}),
 
