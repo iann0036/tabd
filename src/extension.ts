@@ -341,6 +341,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 				const obj = JSON.parse(String(args));
 
+				console.debug("Received internal command:", obj);
+
 				if (!obj || !obj._type) {
 					console.warn("Received invalid internal command:", obj);
 					return;

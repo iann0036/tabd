@@ -78,6 +78,7 @@ const getUpdatedRanges = (
 
     console.debug("getUpdatedRanges called with reason:", reason, "and changes:", JSON.stringify(changes), "and mostRecentInternalCommand:", mostRecentInternalCommand);
 
+    /*
     if (
         changes.length > 1 &&
         changes[changes.length - 1].range.end.line === 0 &&
@@ -90,10 +91,13 @@ const getUpdatedRanges = (
             text: changes.map(change => change.text).reverse().join(''),
         }];
     } // special case for start of document changes
+    */
 
     let sortedChanges = [...changes].sort((change1, change2) =>
         change2.range.start.compareTo(change1.range.start)
     );
+
+    console.log("Sorted changes:", sortedChanges);
 
     const aiInfo = mostRecentInternalCommand.value;
 
@@ -227,19 +231,15 @@ const getUpdatedRanges = (
                     continue;
                 }
 
-                if (!aiInfo.range) {
-                    aiInfo.range = [change.range.start, change.range.end]; // TODO: should be whole document range
-                }
-
-                if (aiInfo.insertText && aiInfo.insertText.trim().includes(change.text.trim()) &&
+                if (aiInfo.insertText && aiInfo.insertText.trim().includes(change.text.trim()) && aiInfo._timestamp > Date.now() - 2000 &&
                     (
-                        (
+                        aiInfo.range ? (
                             change.range.start.line === aiInfo.range[0].line &&
                             change.range.start.character === aiInfo.range[0].character &&
                             change.range.end.line === aiInfo.range[1].line &&
                             change.range.end.character === aiInfo.range[1].character &&
                             aiInfo._timestamp > Date.now() - 2000
-                        )
+                        ) : (true)
                     )
                 ) {
                     options.aiName = aiInfo._extensionName || 'unknown';
