@@ -196,6 +196,88 @@ export function mergeUserEdits(userEdits: ExtendedRange[]): ExtendedRange[] {
 	return [...mergedRanges, ...nonUserEdits];
 }
 
+export function mergeAIGeneratedRanges(ranges: ExtendedRange[]): ExtendedRange[] {
+	// Filter only AI_GENERATED ranges and sort by position
+	const aiRanges = ranges
+		.filter(range => range.getType() === ExtendedRangeType.AIGenerated)
+		.sort((a, b) => {
+			if (a.start.line !== b.start.line) {
+				return a.start.line - b.start.line;
+			}
+			return a.start.character - b.start.character;
+		});
+
+	if (aiRanges.length <= 1) {
+		return ranges; // Nothing to merge
+	}
+
+	const mergedRanges: ExtendedRange[] = [];
+	const nonAIRanges = ranges.filter(range => range.getType() !== ExtendedRangeType.AIGenerated);
+	
+	let currentGroup: ExtendedRange[] = [aiRanges[0]];
+
+	for (let i = 1; i < aiRanges.length; i++) {
+		const current = aiRanges[i];
+		const previous = currentGroup[currentGroup.length - 1];
+
+		// Check if ranges are adjacent (previous.end equals current.start)
+		const areAdjacent = previous.end.isEqual(current.start);
+		
+		// Check if they're from the same AI session (same AI name and model)
+		const sameAI = previous.getAiName() === current.getAiName() && 
+					   previous.getAiModel() === current.getAiModel();
+		
+		// Check if timestamp difference is reasonable for same AI session (within 30 seconds)
+		const timeDiff = Math.abs(current.getCreationTimestamp() - previous.getCreationTimestamp());
+		const withinTimeLimit = timeDiff < 30000;
+
+		if (areAdjacent && sameAI && withinTimeLimit) {
+			// Add to current group
+			currentGroup.push(current);
+		} else {
+			// Process current group and start a new one
+			if (currentGroup.length > 1) {
+				// Merge the group
+				const earliestTimestamp = Math.min(...currentGroup.map(r => r.getCreationTimestamp()));
+				const mergedRange = new ExtendedRange(
+					currentGroup[0].start,
+					currentGroup[currentGroup.length - 1].end,
+					ExtendedRangeType.AIGenerated,
+					earliestTimestamp,
+					currentGroup[0].getAuthor(),
+					currentGroup[0].getOptions()
+				);
+				mergedRanges.push(mergedRange);
+			} else {
+				// Single range, add as is
+				mergedRanges.push(currentGroup[0]);
+			}
+			
+			// Start new group
+			currentGroup = [current];
+		}
+	}
+
+	// Process the last group
+	if (currentGroup.length > 1) {
+		const earliestTimestamp = Math.min(...currentGroup.map(r => r.getCreationTimestamp()));
+		const mergedRange = new ExtendedRange(
+			currentGroup[0].start,
+			currentGroup[currentGroup.length - 1].end,
+			ExtendedRangeType.AIGenerated,
+			earliestTimestamp,
+			currentGroup[0].getAuthor(),
+			currentGroup[0].getOptions()
+		);
+		mergedRanges.push(mergedRange);
+	} else if (currentGroup.length === 1) {
+		mergedRanges.push(currentGroup[0]);
+	}
+
+	// Return all ranges (merged AI ranges + non-AI ranges)
+	return [...mergedRanges, ...nonAIRanges];
+}
+
 export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRanges: ExtendedRange[]): ExtendedRange[] {
 	// Start with existing ranges
 	let mergedRanges: ExtendedRange[] = [...existingRanges];
@@ -384,5 +466,6 @@ export function mergeRangesSequentially(existingRanges: ExtendedRange[], newRang
 		return a.start.character - b.start.character;
 	});
 	
-	return uniqueRanges;
+	// Apply AI merging logic to merge adjacent AI-generated ranges
+	return mergeAIGeneratedRanges(uniqueRanges);
 }

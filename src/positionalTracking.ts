@@ -135,7 +135,7 @@ const getUpdatedRanges = (
             }
 
 
-            additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), reason, Date.now(), '', options));
+            additionalRanges.push(new ExtendedRange(change.range.start, document.positionAt(document.offsetAt(change.range.start) + change.text.length), reason, Date.now(), '', options));
         } else if (reason === ExtendedRangeType.AIGenerated) { // e.g. onAfterInsertEditTool
             console.debug("Processing AI generated range:", aiInfo, change);
             const options = new ExtendedRangeOptions();
@@ -148,13 +148,13 @@ const getUpdatedRanges = (
             options.aiExplanation = aiInfo._explanation || '';
             options.aiType = aiInfo._type ? (typeMap[aiInfo._type] || aiInfo._type) : '';
 
-            additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIGenerated, Date.now(), '', options));
+            additionalRanges.push(new ExtendedRange(change.range.start, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.AIGenerated, Date.now(), '', options));
 
             isAI = true;
 
             clearMostRecentInternalCommandAtEnd = true;
         } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
-            additionalRanges.push(new ExtendedRange(change.range.end, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
+            additionalRanges.push(new ExtendedRange(change.range.start, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
         } else if (change.text.trim().length <= 1 && aiInfo._type !== 'onBeforeInsertEditTool' && aiInfo._type !== 'onBeforeApplyPatchTool' && aiInfo._type !== 'onBeforeCreateFileTool' && aiInfo._type !== 'onBeforeReplaceStringTool' && aiInfo._type !== 'onAfterReplaceStringTool' && aiInfo._type !== 'onAfterApplyPatchTool') {
             additionalRanges.push(new ExtendedRange(change.range.start, change.range.end, ExtendedRangeType.UserEdit, Date.now()));
         } else {
