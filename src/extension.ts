@@ -17,6 +17,10 @@ let currentUser: string = "";
 var editLock = new Mutex();
 var globalFileState: GlobalFileState = {};
 
+const vscodeVersion = vscode.version;
+const vscodeMajorMinor = vscodeVersion.split('.').slice(0, 2).map(Number);
+const [vscodeMajor, vscodeMinor] = vscodeMajorMinor;
+
 export function activate(context: vscode.ExtensionContext) {
 	// Only exclude the .tabd directory from the file explorer when using repository storage
 	const config = vscode.workspace.getConfiguration('tabd');
@@ -29,7 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
 		files.update('exclude', exclude, vscode.ConfigurationTarget.Global);
 	}
 
-	const providerRegistrations = vscode.Disposable.from(
+	const disposables = [
 		// Register the text editor change listener
 		vscode.workspace.onDidChangeTextDocument(e => {
 			if (e.document.uri.scheme !== 'file' || !shouldProcessFile(e.document.uri)) {
@@ -96,9 +100,9 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
-			const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
+			const showBlame = config.get<boolean>('showBlame', false);
 
-			if (showBlameByDefault) {
+			if (showBlame) {
 				const filePath = fsPath(editor.document.uri);
 				const fileState = globalFileState[filePath];
 				if (fileState && fileState.changes.length > 0) {
@@ -110,7 +114,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Register listener for configuration changes
 		vscode.workspace.onDidChangeConfiguration(e => {
-			if (e.affectsConfiguration('tabd.showBlameByDefault')) {
+			if (e.affectsConfiguration('tabd.showBlame')) {
 				// Update decorations for all visible editors when the setting changes
 				for (const editor of vscode.window.visibleTextEditors) {
 					if (editor.document.uri.scheme === 'file' && shouldProcessFile(editor.document.uri)) {
@@ -141,9 +145,9 @@ export function activate(context: vscode.ExtensionContext) {
 				// Reload file state for active editor
 				if (vscode.window.activeTextEditor) {
 					loadGlobalFileStateForDocumentFromDisk(vscode.window.activeTextEditor.document);
-					const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
+					const showBlame = config.get<boolean>('showBlame', false);
 
-					if (showBlameByDefault) {
+					if (showBlame) {
 						const filePath = fsPath(vscode.window.activeTextEditor.document.uri);
 						const fileState = globalFileState[filePath];
 						if (fileState && fileState.changes.length > 0) {
@@ -211,26 +215,13 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}),
 
-		// Register the paste edit provider
-		vscode.languages.registerDocumentPasteEditProvider({
-			scheme: 'file'
-		}, new PasteEditProvider(notifyPaste), {
-			pasteMimeTypes: [
-				"text/*",
-				"application/*",
-			],
-			providedPasteEditKinds: [
-				vscode.DocumentDropOrPasteEditKind.Text,
-			],
-		}),
-
 		// Register the command to toggle the blame
 		vscode.commands.registerCommand('tabd.toggleBlame', async () => {
 			const config = vscode.workspace.getConfiguration('tabd');
-			const currentValue = config.get<boolean>('showBlameByDefault', false);
+			const currentValue = config.get<boolean>('showBlame', false);
 
 			// Toggle the configuration value
-			await config.update('showBlameByDefault', !currentValue, vscode.ConfigurationTarget.Global);
+			await config.update('showBlame', !currentValue, vscode.ConfigurationTarget.Global);
 		}),
 
 		// Register the command to enable/disable change tracking
@@ -427,16 +418,33 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.extensions.onDidChange(() => {
 			patchExtensions();
 		}),
-	);
+	];
+
+	if (vscodeMajor > 1 || (vscodeMajor === 1 && vscodeMinor >= 101)) {
+		// Register the paste edit provider if the VS Code version supports it
+		disposables.push(vscode.languages.registerDocumentPasteEditProvider({
+			scheme: 'file'
+		}, new PasteEditProvider(notifyPaste), {
+			pasteMimeTypes: [
+				"text/*",
+				"application/*",
+			],
+			providedPasteEditKinds: [
+				vscode.DocumentDropOrPasteEditKind.Text,
+			],
+		}));
+	}
+
+	const providerRegistrations = vscode.Disposable.from(...disposables);
 
 	context.subscriptions.push(providerRegistrations);
 
 	if (vscode.window.activeTextEditor) {
 		loadGlobalFileStateForDocumentFromDisk(vscode.window.activeTextEditor.document);
 		const config = vscode.workspace.getConfiguration('tabd');
-		const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
+		const showBlame = config.get<boolean>('showBlame', false);
 
-		if (showBlameByDefault) {
+		if (showBlame) {
 			const filePath = fsPath(vscode.window.activeTextEditor.document.uri);
 			const fileState = globalFileState[filePath];
 			if (fileState && fileState.changes.length > 0) {

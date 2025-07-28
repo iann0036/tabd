@@ -40,9 +40,9 @@ const idePasteDecorator = vscode.window.createTextEditorDecorationType({
 
 export function triggerDecorationUpdate(d: vscode.TextDocument, updatedRanges: ExtendedRange[]) {
     const config = vscode.workspace.getConfiguration('tabd');
-    const showBlameByDefault = config.get<boolean>('showBlameByDefault', false);
+    const showBlame = config.get<boolean>('showBlame', false);
 
-    if (showBlameByDefault) {
+    if (showBlame) {
         forceShowDecorations(d, updatedRanges);
         return;
     }

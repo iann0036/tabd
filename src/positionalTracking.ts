@@ -77,8 +77,8 @@ const getUpdatedRanges = (
     let clearMostRecentInternalCommandAtEnd = false;
 
     console.debug("getUpdatedRanges called with reason:", reason, "and changes:", JSON.stringify(changes), "and mostRecentInternalCommand:", mostRecentInternalCommand);
-
-    /*
+    
+    // if all changes are at the start of the document, we need to reverse them - special case (required for insertFile GPT 4.1)
     if (
         changes.length > 1 &&
         changes[changes.length - 1].range.end.line === 0 &&
@@ -90,8 +90,7 @@ const getUpdatedRanges = (
             rangeLength: changes[0].rangeLength,
             text: changes.map(change => change.text).reverse().join(''),
         }];
-    } // special case for start of document changes
-    */
+    }
 
     let sortedChanges = [...changes].sort((change1, change2) =>
         change2.range.start.compareTo(change1.range.start)

@@ -43,20 +43,27 @@ async function getExtensionMetadata(extensionDir: string): Promise<ExtensionMeta
     }
 }
 
-function getVSCodeExtensionsPath(): string {
-    const homeDir = os.homedir();
-    const platform = os.platform();
-
-    switch (platform) {
-        case 'win32':
-            return path.join(homeDir, '.vscode', 'extensions');
-        case 'darwin':
-            return path.join(homeDir, '.vscode', 'extensions');
-        case 'linux':
-            return path.join(homeDir, '.vscode', 'extensions');
-        default:
-            throw new Error(`unsupported operating system: ${platform}`);
+function getExtensionsPath(): string {
+    // Start from the current executing file location
+    let currentDir = __dirname;
+    
+    // Navigate up the directory tree to find the extensions directory
+    // The structure should be: extensions/<extension-id>/...
+    while (currentDir !== path.dirname(currentDir)) { // Stop at filesystem root
+        const parentDir = path.dirname(currentDir);
+        const parentName = path.basename(parentDir);
+        
+        // Check if the parent directory is named "extensions"
+        if (parentName === 'extensions') {
+            return parentDir;
+        }
+        
+        currentDir = parentDir;
     }
+    
+    // Fallback: if we can't find it by navigating up, try the standard VS Code location
+    const homeDir = os.homedir();
+    return path.join(homeDir, '.vscode', 'extensions');
 }
 
 function isSupportedFile(filename: string): boolean {
@@ -813,14 +820,14 @@ async function walkExtensions(extensionsPath: string): Promise<void> {
 
 export async function patchExtensions(): Promise<void> {
     try {
-        // Get the VS Code extensions path
-        const extensionsPath = getVSCodeExtensionsPath();
+        // Get the extensions path
+        const extensionsPath = getExtensionsPath();
 
         // Check if the extensions directory exists
         try {
             await fs.access(extensionsPath);
         } catch (err) {
-            console.debug(`Error: VS Code extensions directory does not exist: ${extensionsPath}`);
+            console.debug(`Error: Extensions directory does not exist: ${extensionsPath}`);
         }
 
         // Walk through all extensions and patch files
