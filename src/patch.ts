@@ -3,6 +3,7 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Parser, Language, Query } from 'web-tree-sitter';
+import * as vscode from 'vscode';
 
 class ExtensionMetadata {
     name: string;
@@ -775,12 +776,16 @@ async function walkDirectory(dir: string, callback: (filePath: string) => Promis
     }
 }
 
-async function walkExtensions(extensionsPath: string): Promise<void> {
+async function walkExtensions(extensionsPath: string, filter: string[]): Promise<void> {
     try {
         const entries = await fs.readdir(extensionsPath, { withFileTypes: true });
         
         for (const entry of entries) {
             if (!entry.isDirectory()) {
+                continue;
+            }
+
+            if (filter.length > 0 && !filter.includes(entry.name)) {
                 continue;
             }
 
@@ -831,7 +836,10 @@ export async function patchExtensions(): Promise<void> {
         }
 
         // Walk through all extensions and patch files
-        await walkExtensions(extensionsPath);
+        await walkExtensions(extensionsPath, []);
+
+        // Walk known system extensions and patch files
+        await walkExtensions(path.join(vscode.env.appRoot, 'extensions'), ['kiro.kiro-agent', 'windsurf']);
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
         console.debug(`Error: ${errorMessage}`);

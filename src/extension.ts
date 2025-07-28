@@ -339,14 +339,32 @@ export function activate(context: vscode.ExtensionContext) {
 					return;
 				}
 
+				if (obj._type === 'onBeforeApplyEdit' || obj._type === 'onAfterApplyEdit') {
+					obj.filePath = obj.edit[0][0].fsPath;
+					if (obj.edit[0][1].length !== 1) {
+						console.warn("Received internal command with unexpected edit length:", obj);
+						return;
+					}
+					obj.insertText = obj.edit[0][1][0].newText;
+				}
+
 				if (obj && obj.insertText && typeof obj.insertText !== 'string') {
 					console.warn("Received internal command with invalid insertText:", obj);
 					return;
 				}
 
 				if (!obj.filePath) {
-					if (obj.command.arguments && obj.command.arguments[0] && obj.command.arguments[0].uri) {
+					if (obj.command && obj.command.arguments && obj.command.arguments[0] && obj.command.arguments[0].uri) {
 						obj.filePath = fsPath(vscode.Uri.parse(obj.command.arguments[0].uri));
+					} else if (obj._type === 'inlineCompletion') {
+						// use active editor for inline completions
+						const activeEditor = vscode.window.activeTextEditor;
+						if (activeEditor && activeEditor.document.uri.scheme === 'file') {
+							obj.filePath = fsPath(activeEditor.document.uri);
+						} else {
+							console.warn("Received internal command without filePath and no active editor:", obj);
+							return;
+						}
 					} else {
 						console.warn("Received internal command without filePath:", obj);
 						return;

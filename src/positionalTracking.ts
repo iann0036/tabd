@@ -230,7 +230,13 @@ const getUpdatedRanges = (
                     continue;
                 }
 
-                if (aiInfo.insertText && aiInfo.insertText.trim().includes(change.text.trim()) && aiInfo._timestamp > Date.now() - 2000 &&
+                if (aiInfo.insertText && aiInfo.insertText.trim().includes(change.text.trim()) &&
+                    (
+                        aiInfo._timestamp > Date.now() - 2000 || (
+                            aiInfo._type === "inlineCompletion" &&
+                            aiInfo._timestamp > Date.now() - 300000 // 5 minutes
+                        )
+                    ) &&
                     (
                         aiInfo.range ? (
                             change.range.start.line === aiInfo.range[0].line &&

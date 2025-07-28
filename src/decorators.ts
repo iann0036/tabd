@@ -79,7 +79,7 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
                 }[range.getAiType()] || ' • Using an unknown tool';
                 return {
                     range: range,
-                    hoverMessage: `AI Generated under ${range.getAuthor() ? (range.getAuthor() + "'s") : 'your'} control${range.getAiName() !== '' ? ` • ${range.getAiName()} (${range.getAiModel()})` : ''}${aiType} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
+                    hoverMessage: `AI Generated under ${range.getAuthor() ? (range.getAuthor() + "'s") : 'your'} control${range.getAiName() !== '' ? ` • ${range.getAiName()}` : ''}${range.getAiModel() !== '' ? ` (${range.getAiModel()})` : ''}${aiType} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,
                 };
             }));
             editor.setDecorations(undoRedoDecorator, updatedRanges.filter(range => range.getType() === ExtendedRangeType.UndoRedo).map(range => {
