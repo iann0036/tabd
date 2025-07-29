@@ -92,6 +92,17 @@ export class ExtendedRange extends vscode.Range {
 	}
 }
 
+function areOptionsEqual(options1: ExtendedRangeOptions, options2: ExtendedRangeOptions): boolean {
+	return (
+		(options1.pasteUrl || '') === (options2.pasteUrl || '') &&
+		(options1.pasteTitle || '') === (options2.pasteTitle || '') &&
+		(options1.aiName || '') === (options2.aiName || '') &&
+		(options1.aiModel || '') === (options2.aiModel || '') &&
+		(options1.aiExplanation || '') === (options2.aiExplanation || '') &&
+		(options1.aiType || '') === (options2.aiType || '')
+	);
+}
+
 function deduplicateRanges(ranges: ExtendedRange[]): ExtendedRange[] {
     const uniqueRanges: ExtendedRange[] = [];
     
@@ -103,11 +114,7 @@ function deduplicateRanges(ranges: ExtendedRange[]): ExtendedRange[] {
             existing.getType() === range.getType() &&
             existing.getCreationTimestamp() === range.getCreationTimestamp() &&
             existing.getAuthor() === range.getAuthor() &&
-			existing.getPasteUrl() === range.getPasteUrl() &&
-			existing.getPasteTitle() === range.getPasteTitle() &&
-			existing.getAiName() === range.getAiName() &&
-			existing.getAiModel() === range.getAiModel() &&
-			existing.getAiExplanation() === range.getAiExplanation()
+			areOptionsEqual(existing.getOptions(), range.getOptions())
         );
         
         if (!isDuplicate) {
@@ -223,15 +230,14 @@ export function mergeAIGeneratedRanges(ranges: ExtendedRange[]): ExtendedRange[]
 		// Check if ranges are adjacent (previous.end equals current.start)
 		const areAdjacent = previous.end.isEqual(current.start);
 		
-		// Check if they're from the same AI session (same AI name and model)
-		const sameAI = previous.getAiName() === current.getAiName() && 
-					   previous.getAiModel() === current.getAiModel();
+		// Check if they have the same options (all AI-related fields must match)
+		const sameOptions = areOptionsEqual(previous.getOptions(), current.getOptions());
 		
 		// Check if timestamp difference is reasonable for same AI session (within 30 seconds)
 		const timeDiff = Math.abs(current.getCreationTimestamp() - previous.getCreationTimestamp());
 		const withinTimeLimit = timeDiff < 30000;
 
-		if (areAdjacent && sameAI && withinTimeLimit) {
+		if (areAdjacent && sameOptions && withinTimeLimit) {
 			// Add to current group
 			currentGroup.push(current);
 		} else {

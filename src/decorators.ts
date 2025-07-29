@@ -76,7 +76,8 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
                     'createFile': ' • Using the create file tool',
                     'insertEdit': ' • Using the insert edit tool',
                     'replaceString': ' • Using the replace string tool',
-                }[range.getAiType()] || ' • Using an unknown tool';
+                    'applyEdit': ' • Using an apply edit command',
+                }[range.getAiType()] || ` • Using an unknown tool (${range.getAiType()})`;
                 return {
                     range: range,
                     hoverMessage: `AI Generated under ${range.getAuthor() ? (range.getAuthor() + "'s") : 'your'} control${range.getAiName() !== '' ? ` • ${range.getAiName()}` : ''}${range.getAiModel() !== '' ? ` (${range.getAiModel()})` : ''}${aiType} • Created at: ${new Date(range.getCreationTimestamp()).toLocaleString()}`,

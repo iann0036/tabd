@@ -339,7 +339,11 @@ export function activate(context: vscode.ExtensionContext) {
 					return;
 				}
 
-				if (obj._type === 'onBeforeApplyEdit' || obj._type === 'onAfterApplyEdit') {
+				if (obj._extensionName === "kiroAgent") {
+					obj._extensionName = "Kiro"; // Normalize extension name
+				}
+
+				if (obj._type.startsWith('onBeforeApplyEdit') || obj._type.startsWith('onAfterApplyEdit')) {
 					obj.filePath = obj.edit[0][0].fsPath;
 					if (obj.edit[0][1].length !== 1) {
 						console.warn("Received internal command with unexpected edit length:", obj);

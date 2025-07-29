@@ -18,6 +18,8 @@ const typeMap: { [key: string]: string } = {
     'onAfterInsertEditTool': 'insertEdit',
     'onAfterReplaceStringTool': 'replaceString',
     'inlineCompletion': 'inlineCompletion',
+    'onBeforeApplyEdit': 'applyEdit',
+    'onAfterApplyEdit': 'applyEdit',
 };
 
 const getUpdatedPosition = (
@@ -154,7 +156,7 @@ const getUpdatedRanges = (
             clearMostRecentInternalCommandAtEnd = true;
         } else if (reason === vscode.TextDocumentChangeReason.Undo || reason === vscode.TextDocumentChangeReason.Redo) {
             additionalRanges.push(new ExtendedRange(change.range.start, document.positionAt(document.offsetAt(change.range.start) + change.text.length), ExtendedRangeType.UndoRedo, Date.now()));
-        } else if (change.text.trim().length <= 1 && aiInfo._type !== 'onBeforeInsertEditTool' && aiInfo._type !== 'onBeforeApplyPatchTool' && aiInfo._type !== 'onBeforeCreateFileTool' && aiInfo._type !== 'onBeforeReplaceStringTool' && aiInfo._type !== 'onAfterReplaceStringTool' && aiInfo._type !== 'onAfterApplyPatchTool') {
+        } else if (change.text.trim().length <= 1 && aiInfo._type !== 'onBeforeInsertEditTool' && aiInfo._type !== 'onBeforeApplyPatchTool' && aiInfo._type !== 'onBeforeCreateFileTool' && aiInfo._type !== 'onBeforeReplaceStringTool' && aiInfo._type !== 'onAfterReplaceStringTool' && aiInfo._type !== 'onAfterApplyPatchTool' && aiInfo._type !== 'onBeforeApplyEdit' && aiInfo._type !== 'onAfterApplyEdit') {
             additionalRanges.push(new ExtendedRange(change.range.start, change.range.end, ExtendedRangeType.UserEdit, Date.now()));
         } else {
             let startPosition = change.range.start;
@@ -256,7 +258,7 @@ const getUpdatedRanges = (
                     options.aiType = aiInfo._type ? (typeMap[aiInfo._type] || aiInfo._type) : '';
                     isAI = true;
 
-                    if (aiInfo._type === 'onAfterReplaceStringTool' || aiInfo._type === 'onAfterApplyPatchTool') { // use only once
+                    if (aiInfo._type === 'onAfterApplyEdit' || aiInfo._type === 'onAfterReplaceStringTool' || aiInfo._type === 'onAfterApplyPatchTool') { // use only once
                         clearMostRecentInternalCommandAtEnd = true;
                     }
                 }

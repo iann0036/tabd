@@ -93,25 +93,158 @@ function compareVersions(version1: string, version2: string): number {
     return 0;
 }
 
-function extractFirstVariableFromParams(params: string): string {
+function extractVariableFromParams(params: string, index: number): string {
     // Split by comma and take the first parameter
     const parts = params.split(',');
-    if (parts.length === 0) {
-        throw new Error('no parameters found');
+    if (parts.length < index + 1) {
+        throw new Error('parameter not available');
     }
 
-    // Clean up the first parameter (remove whitespace)
-    const firstParam = parts[0].trim();
+    // Clean up the parameter (remove whitespace)
+    const param = parts[index].trim();
 
     // Extract variable name using regex
     const pattern = /^([a-zA-Z_$][a-zA-Z0-9_$]*)/;
-    const matches = firstParam.match(pattern);
+    const matches = param.match(pattern);
 
     if (!matches || matches.length < 2) {
-        throw new Error(`could not extract variable name from parameter: ${firstParam}`);
+        throw new Error(`could not extract variable name from parameter: ${param}`);
     }
 
     return matches[1];
+}
+
+async function patchKiroAgent(filePath: string): Promise<void> {
+    await Parser.init();
+    const parser = new Parser();
+    const JavaScript = await Language.load(path.join(__dirname, '..', 'node_modules', 'tree-sitter-javascript', 'tree-sitter-javascript.wasm'));
+    parser.setLanguage(JavaScript);
+    let sourceCode = await fs.readFile(filePath, 'utf8');
+    const tree = parser.parse(sourceCode);
+
+    let inserts = [];
+
+    const queryPattern = `
+        [
+            (expression_statement
+                (await_expression
+                    (call_expression
+                            function: (member_expression
+                            object: (member_expression
+                                object: (identifier)
+                                property: (property_identifier) @workspacestr
+                            )
+                            property: (property_identifier) @applyeditstr
+                            )
+                            arguments: (arguments
+                                [
+                                    (identifier)
+                                    (member_expression)
+                                ] @arg1
+                            )
+                    )
+                    (#eq? @workspacestr "workspace")
+                    (#eq? @applyeditstr "applyEdit")
+                )
+            ) @on_before_before_this @on_after_after_this
+            (lexical_declaration
+                (variable_declarator
+                    value: (await_expression
+                        (call_expression
+                                function: (member_expression
+                                object: (member_expression
+                                    object: (identifier)
+                                    property: (property_identifier) @workspacestr
+                                )
+                                property: (property_identifier) @applyeditstr
+                                )
+                                arguments: (arguments
+                                    [
+                                        (identifier)
+                                        (member_expression)
+                                    ] @arg1
+                                )
+                        )
+                        (#eq? @workspacestr "workspace")
+                        (#eq? @applyeditstr "applyEdit")
+                    )
+                )
+            ) @on_before_before_this @on_after_after_this
+        ]
+    `;
+    if (!tree) {
+        console.error('Failed to parse source code.');
+        return;
+    }
+    
+    const query = new Query(JavaScript, queryPattern);
+    const matches = query.matches(tree.rootNode);
+    for (const match of matches) {
+        let index1 = 0;
+        let index2 = 0;
+        let arg1 = '';
+
+        for (const capture of match.captures) {
+            const node = capture.node;
+            const text = node.text || sourceCode.slice(node.startIndex, node.endIndex);
+            if (capture.name === 'on_before_before_this') {
+                index1 = node.startIndex;
+            }
+            if (capture.name === 'on_after_after_this') {
+                index2 = node.endIndex;
+            }
+            if (capture.name === 'arg1') {
+                arg1 = text;
+            }
+        }
+
+        if (index1 === 0 || index2 === 0 || !arg1) {
+            console.error('Failed to find required captures.');
+            return;
+        }
+
+        inserts.push({
+            contents: `/*tabd*/;require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                "edit": ${arg1},
+                "_extensionName": "Kiro",
+                "_timestamp": new Date().getTime(),
+                "_type": "onBeforeApplyEdit",
+            }));/**/ `,
+            offset: index1,
+        });
+        inserts.push({
+            contents: `/*tabd*/;require('vscode').commands.executeCommand("tabd._internal", JSON.stringify({
+                "edit": ${arg1},
+                "_extensionName": "Kiro",
+                "_timestamp": new Date().getTime(),
+                "_type": "onAfterApplyEdit",
+            }));/**/ `,
+            offset: index2,
+        });
+    }
+
+    if (inserts.length === 0) {
+        console.log('No matches found for the query.');
+        return;
+    }
+
+    // Sort inserts by offset in descending order to avoid index shifting issues
+    inserts.sort((a, b) => b.offset - a.offset);
+
+    // Trim newlines
+    inserts.map(insert => { insert.contents = insert.contents.split("\n").map(s => s.trim()).join(' '); return insert; });
+
+    // Apply the inserts to the source code
+    for (const insert of inserts) {
+        sourceCode = sourceCode.slice(0, insert.offset) + insert.contents + sourceCode.slice(insert.offset);
+    }
+
+    // Write the modified source code back to the file
+    try {
+        await fs.writeFile(filePath, sourceCode, 'utf8');
+    } catch (error) {
+        console.error(`Failed to write to file ${filePath}:`, error);
+    }
 }
 
 async function patchGitHubCopilotChat(filePath: string): Promise<void> {
@@ -669,9 +802,21 @@ async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | nu
             content = await fs.readFile(filePath, 'utf8');
             originalContent = content;
         }
+        
+        if (filePath.includes("kiro.kiro-agent") && filePath.endsWith('extension.js')) {
+            // Special handling for Kiro Agent
+            await patchKiroAgent(filePath);
+            // Re-read the file after patching
+            content = await fs.readFile(filePath, 'utf8');
+            originalContent = content;
+        }
 
         // Pattern to find the function call with opening brace - handle minified code
-        const functionPattern = /(?:handleDidPartiallyAcceptCompletionItem|handleDidShowCompletionItem)\s*\(([^)]*)\)\s*\{/g;
+        let functionPattern = /(?:handleDidPartiallyAcceptCompletionItem|handleDidShowCompletionItem)\s*\(([^)]*)\)\s*\{/g;
+        if (filePath.includes("kiro.kiro-agent") && filePath.endsWith('extension.js')) {
+            // Special handling for Kiro Agent
+            functionPattern = /markDisplayed\s*\(([^)]*)\)\s*\{/g;
+        }
 
         // Find all matches with their positions
         const matches = [];
@@ -709,7 +854,7 @@ async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | nu
             // Extract the first variable from the parameters
             let firstVar: string;
             try {
-                firstVar = extractFirstVariableFromParams(matchInfo.params);
+                firstVar = extractVariableFromParams(matchInfo.params, 0);
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Unknown error';
                 console.debug(`Warning: Could not extract variable from parameters '${matchInfo.params}' in ${filePath}: ${errorMessage}`);
@@ -724,7 +869,19 @@ async function patchFile(filePath: string, extensionMeta: ExtensionMetadata | nu
             }
 
             // Create an enhanced data object that includes both the original data and extension metadata
-            const patchCode = `/*tabd*/try{require('vscode').commands.executeCommand('tabd._internal',JSON.stringify({...${firstVar},'_extensionName':'${extensionName}','_timestamp':new Date().getTime(),'_type':'inlineCompletion'}));}catch(e){}/**/`;
+            let patchCode = `/*tabd*/try{require('vscode').commands.executeCommand('tabd._internal',JSON.stringify({...${firstVar},'_extensionName':'${extensionName}','_timestamp':new Date().getTime(),'_type':'inlineCompletion'}));}catch(e){}/**/`;
+            if (filePath.includes("kiro.kiro-agent") && filePath.endsWith('extension.js')) {
+                // Special handling for Kiro Agent
+                let secondVar: string;
+                try {
+                    secondVar = extractVariableFromParams(matchInfo.params, 1);
+                } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                    console.debug(`Warning: Could not extract variable from parameters '${matchInfo.params}' in ${filePath}: ${errorMessage}`);
+                    continue;
+                }
+                patchCode = `/*tabd*/try{require('vscode').commands.executeCommand('tabd._internal',JSON.stringify({'insertText':${secondVar}.completion,'filePath':${secondVar}.filepath,'_extensionName':'${extensionName}','_timestamp':new Date().getTime(),'_type':'inlineCompletion'}));}catch(e){}/**/`;
+            }
 
             // Find the opening brace position within the match
             const bracePos = matchInfo.fullMatch.indexOf('{');
