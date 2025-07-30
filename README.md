@@ -87,8 +87,7 @@ Tab'd uses safe, local-only defaults. You can configure Tab'd through settings:
 
 The following extensions are known to be supported (though bugs will likely still exist):
 
-- **GitHub Copilot** (inline suggestions)
-- **GitHub Copilot Chat** (inline suggestions and edit/agent mode)
+- **GitHub Copilot / GitHub Copilot Chat** (inline suggestions and edit/agent mode)
 - **Windsurf** (inline suggestions and edit/agent mode)
 - **Kiro** (inline suggestions and edit/agent mode)
 
