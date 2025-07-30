@@ -83,7 +83,7 @@ Tab'd uses safe, local-only defaults. You can configure Tab'd through settings:
 }
 ```
 
-## Supported AI Extensions
+## Supported IDE Extensions
 
 The following extensions are known to be supported (though bugs will likely still exist):
 
