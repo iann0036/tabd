@@ -35,7 +35,7 @@ Hovering over a highlight gives further information about the type of change, wh
 
 Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=iann0036.tabd).
 
-To add web-based UI support and/or webpage clipboard support, you must also install the [browser extension](https://github.com/iann0036/tabd-extension).
+To add web-based UI support and/or webpage clipboard support, you must also install the [browser extension](https://github.com/iann0036/tabd-extension) and its associated native host tool.
 
 ## Usage
 
