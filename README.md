@@ -89,6 +89,8 @@ The following extensions are known to be supported (though bugs will likely stil
 
 - **GitHub Copilot** (inline suggestions)
 - **GitHub Copilot Chat** (inline suggestions and edit/agent mode)
+- **Windsurf** (inline suggestions and edit/agent mode)
+- **Kiro** (inline suggestions and edit/agent mode)
 
 ## Privacy & Data
 
