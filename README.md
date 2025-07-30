@@ -64,7 +64,7 @@ Tab'd uses safe, local-only defaults. You can configure Tab'd through settings:
 | `tabd.disabled` | Disable all Tab'd features | `false` |
 | `tabd.storage` | Where to store tracking data | `homeDirectory` |
 | `tabd.showBlame` | Show blame/attribution in the editor | `false` |
-| `tabd.enableIDEClipboardMonitoring` | Track clipboard copies from the IDE (e.g. Ctrl+C, Cmd+C) | `true` |
+| `tabd.enableIDEClipboardMonitoring` | Track clipboard copies from the IDE (VS Code only) | `true` |
 
 #### Storage Options
 
