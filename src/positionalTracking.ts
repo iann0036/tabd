@@ -242,10 +242,7 @@ const getUpdatedRanges = (
                     (
                         aiInfo.range ? (
                             change.range.start.line === aiInfo.range[0].line &&
-                            change.range.start.character === aiInfo.range[0].character &&
-                            change.range.end.line === aiInfo.range[1].line &&
-                            change.range.end.character === aiInfo.range[1].character &&
-                            aiInfo._timestamp > Date.now() - 2000
+                            change.range.start.character === aiInfo.range[0].character
                         ) : (true)
                     )
                 ) {
