@@ -76,7 +76,7 @@ export function forceShowDecorations(d: vscode.TextDocument, updatedRanges: Exte
                     'createFile': ' • Using the create file tool',
                     'insertEdit': ' • Using the insert edit tool',
                     'replaceString': ' • Using the replace string tool',
-                    'applyEdit': ' • Using an apply edit command',
+                    'applyEdit': ' • Using an internal command',
                 }[range.getAiType()] || ` • Using an unknown tool (${range.getAiType()})`;
                 return {
                     range: range,

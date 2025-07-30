@@ -344,12 +344,14 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 
 				if (obj._type.startsWith('onBeforeApplyEdit') || obj._type.startsWith('onAfterApplyEdit')) {
-					obj.filePath = obj.edit[0][0].fsPath;
-					if (obj.edit[0][1].length !== 1) {
-						console.warn("Received internal command with unexpected edit length:", obj);
-						return;
+					if (obj.edit) {
+						obj.filePath = obj.edit[0][0].fsPath;
+						if (obj.edit[0][1].length !== 1) {
+							console.warn("Received internal command with unexpected edit length:", obj);
+							return;
+						}
+						obj.insertText = obj.edit[0][1][0].newText;
 					}
-					obj.insertText = obj.edit[0][1][0].newText;
 				}
 
 				if (obj && obj.insertText && typeof obj.insertText !== 'string') {
