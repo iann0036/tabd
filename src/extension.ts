@@ -808,6 +808,12 @@ async function saveFileState(document: vscode.TextDocument): Promise<void> {
 			console.warn('No Git repository found. Skipping file state save.');
 			return;
 		}
+
+		const gitAttributesPath = path.join(workspaceFolder.uri.fsPath, '.gitattributes');
+		if (!fs.existsSync(gitAttributesPath)) {
+			// Create .gitattributes file if it doesn't exist
+			fs.writeFileSync(gitAttributesPath, `.tabd/** linguist-generated=true\n`);
+		}
 	}
 
 	// Get the appropriate storage directory
