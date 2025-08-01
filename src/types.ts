@@ -31,3 +31,13 @@ export interface FileState {
 export interface GlobalFileState {
     [key: string]: FileState;
 }
+
+export interface ClipboardData {
+    type: string;
+    text: string;
+    timestamp: number;
+    url?: string;
+    title?: string;
+    relativePath?: string;
+    workspacePath?: string;
+}

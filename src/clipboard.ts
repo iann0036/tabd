@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { shouldProcessFile } from './utils';
+import { ClipboardData } from './types';
 
 var lastClipboardContent: string | null = null;
 var clipboardTrackingTimer: NodeJS.Timeout | null = null;
+
+// Exported global variable to store the latest clipboard data
+export var latestClipboardData: ClipboardData;
 
 export async function enableClipboardTracking() {
     if (clipboardTrackingTimer) {
@@ -72,28 +73,20 @@ async function checkClipboardContent() {
 
                         let relativePath = vscode.workspace.asRelativePath(activeEditor.document.uri, false);
 
-                        // Create the clipboard data object
-                        const clipboardData = {
+                        // Create the clipboard data object and store it in the global variable
+                        latestClipboardData = {
                             type: "ide_clipboard_copy",
                             text: text,
                             timestamp: Date.now(),
                             relativePath: relativePath,
                             workspacePath: workspaceFolder.uri.fsPath,
+                            url: undefined,
+                            title: undefined
                         };
-
-                        // Ensure the ~/.tabd directory exists
-                        const tabdDir = path.join(os.homedir(), '.tabd');
-                        if (!fs.existsSync(tabdDir)) {
-                            fs.mkdirSync(tabdDir, { recursive: true });
-                        }
-
-                        // Write the clipboard content to ~/.tabd/latest_clipboard.json
-                        const clipboardFilePath = path.join(tabdDir, 'latest_clipboard.json');
-                        fs.writeFileSync(clipboardFilePath, JSON.stringify(clipboardData, null, 2));
 
                         return;
                     } catch (error) {
-                        console.warn('Failed to write clipboard data:', error);
+                        console.warn('Failed to store clipboard data:', error);
                     }
                 }
             }
@@ -108,16 +101,8 @@ export function disableClipboardTracking() {
 
         // Ensure we check the clipboard one last time to capture any final changes
         checkClipboardContent().then(() => {
-            const tabdDir = path.join(os.homedir(), '.tabd');
-            if (!fs.existsSync(tabdDir)) {
-                return;
-            }
-
-            const clipboardFilePath = path.join(tabdDir, 'latest_clipboard.json');
-            if (fs.existsSync(clipboardFilePath)) {
-                // Remove the latest clipboard file
-                fs.unlinkSync(clipboardFilePath);
-            }
+            // Clear the global clipboard data when tracking is disabled
+            latestClipboardData = {} as ClipboardData;
         });
     }
 }

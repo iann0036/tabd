@@ -10,9 +10,10 @@
     "github copilot",
     "cursor",
     "windsurf",
+    "kiro",
     "tab completion",
     "code completion",
-    "StackOverflow"
+    "Stack Overflow"
   ],
   "icon": "assets/tabd_logo.png",
   "version": "0.0.3",
@@ -58,6 +59,10 @@
       {
         "command": "tabd.clearDataWorkspace",
         "title": "Tab'd: Clear tracking data for the current workspace or repository"
+      },
+      {
+        "command": "tabd.installNativeHost",
+        "title": "Tab'd: Install browser helper"
       }
     ],
     "configuration": {

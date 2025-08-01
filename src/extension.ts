@@ -12,6 +12,7 @@ import { SerializedFileState, GlobalFileState } from './types';
 import { getGitNotesNamespace, saveToGitNotes, loadFromGitNotes, getCurrentGitUser } from './git';
 import { enableClipboardTracking, disableClipboardTracking } from './clipboard';
 import { patchExtensions } from './patch';
+import { installNativeHost } from './nativeHost';
 
 let currentUser: string = "";
 var editLock = new Mutex();
@@ -317,6 +318,16 @@ export function activate(context: vscode.ExtensionContext) {
 				enableClipboardTracking();
 			} else {
 				disableClipboardTracking();
+			}
+		}),
+
+		// Register the command to install browser helper
+		vscode.commands.registerCommand('tabd.installNativeHost', async () => {
+			try {
+				await installNativeHost();
+			} catch (error) {
+				console.error('Failed to install browser helper:', error);
+				vscode.window.showErrorMessage(`Failed to install browser helper: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		}),
 

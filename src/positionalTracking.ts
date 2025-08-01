@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { ExtendedRange, ExtendedRangeType, ExtendedRangeOptions } from './extendedRange';
 import { execSync } from 'child_process';
+import { latestClipboardData } from './clipboard';
+import { getClipboardContentsFromBrowserExtension } from './nativeHost';
 
 let mostRecentInternalCommand: any = {
     value: { "_type": "initial" },
@@ -118,17 +120,19 @@ const getUpdatedRanges = (
         if (reason === ExtendedRangeType.Paste || reason === ExtendedRangeType.IDEPaste) {
             const options = new ExtendedRangeOptions();
             const pasteContent = change.text.trim();
-            let recentPaste = { url: '', title: '', type: 'clipboard_copy', workspacePath: '', relativePath: '' };
             if (pasteContent.length > 0) {
-                recentPaste = checkRecentPaste(pasteContent);
-                if (recentPaste && recentPaste.type === 'ide_clipboard_copy') {
+                const checkedPaste = checkRecentPaste(pasteContent);
+                if (checkedPaste && checkedPaste.type === 'ide_clipboard_copy') {
                     reason = ExtendedRangeType.IDEPaste;
-                    const ideProps = resolveIDEPaste(recentPaste.workspacePath, recentPaste.relativePath);
+                    const ideProps = resolveIDEPaste(checkedPaste.workspacePath ?? '', checkedPaste.relativePath ?? '');
                     options.pasteUrl = ideProps.url || '';
                     options.pasteTitle = ideProps.title || '';
-                } else if (recentPaste) {
-                    options.pasteUrl = recentPaste.url || '';
-                    options.pasteTitle = recentPaste.title || '';
+                } else if (checkedPaste && checkedPaste.type === 'clipboard_copy') {
+                    options.pasteUrl = checkedPaste.url || '';
+                    options.pasteTitle = checkedPaste.title || '';
+                } else {
+                    options.pasteUrl = '';
+                    options.pasteTitle = '';
                 }
             } else {
                 options.pasteUrl = '';
@@ -405,25 +409,31 @@ const getUpdatedRanges = (
 };
 
 function checkRecentPaste(content: string) {
-    // Read from home directory file
-    const homeDir = require('os').homedir();
-    const recentPastesFile = `${homeDir}/.tabd/latest_clipboard.json`;
-    /*
-    {
-    "type": "clipboard_copy|ide_clipboard_copy",
-    "text": "sometext",
-    "timestamp": 1751376150324,
-    "url": "https://example.com",
-    "title": "Example Domain"
-    }
-   */
     try {
-        const data = require('fs').readFileSync(recentPastesFile, 'utf8');
-        const recentPastes = JSON.parse(data);
-        if ((recentPastes.type === 'clipboard_copy' || recentPastes.type === 'ide_clipboard_copy') && recentPastes.text.trim() === content && recentPastes.timestamp > Date.now() - 3600000) { // 1 hour
-            return recentPastes;
+        const latestExtensionClipboard = getClipboardContentsFromBrowserExtension();
+        if (latestExtensionClipboard && latestExtensionClipboard.text && latestExtensionClipboard.text.trim() === content) {
+            latestClipboardData.type = 'clipboard_copy';
+            latestClipboardData.text = latestExtensionClipboard.text;
+            latestClipboardData.timestamp = latestExtensionClipboard.timestamp*1000 || Date.now();
+            latestClipboardData.relativePath = undefined;
+            latestClipboardData.workspacePath = undefined;
+            latestClipboardData.url = latestExtensionClipboard.url;
+            latestClipboardData.title = latestExtensionClipboard.title;
         }
     } catch (error) { }
+
+    // Use the global clipboard data instead of reading from file
+    if (!latestClipboardData) {
+        return null;
+    }
+
+    // Check if the content matches and is recent (within 1 hour)
+    if ((latestClipboardData.type === 'clipboard_copy' || latestClipboardData.type === 'ide_clipboard_copy') && 
+        latestClipboardData.text.trim() === content && 
+        latestClipboardData.timestamp > Date.now() - 3600000) { // 1 hour
+        return latestClipboardData;
+    }
+    
     return null;
 }
 

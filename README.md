@@ -53,6 +53,9 @@ Access these commands via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
 
 - `Tab'd: Toggle Blame` - Show/hide the color-coded edit attribution
 - `Tab'd: Toggle Enabled` - Enable/disable all Tab'd tracking
+- `Tab'd: Clear tracking data for current file` - Clears tracking data for the currently open file
+- `Tab'd: Clear tracking data for current workspace or repository` - Clears all tracking data
+- `Tab'd: Install browser helper` - Installs the browser helper to the machine (allows for web browser clipboard context)
 
 ## Configuration
 
