@@ -89,7 +89,7 @@ Tab'd uses safe, local-only defaults. You can configure Tab'd through settings:
 
 ## Supported IDE's and Extensions
 
-The following extensions are known to be supported (though bugs will likely still exist):
+The following IDE's and extensions are known to be supported (though bugs will likely still exist):
 
 - **GitHub Copilot / GitHub Copilot Chat** (inline suggestions and edit/agent mode)
 - **Windsurf** (inline suggestions and edit/agent mode)
