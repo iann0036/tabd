@@ -15,7 +15,7 @@ Tab'd provides intelligent tracking and visualization of different types of code
 - **Visual Code Attribution** - Color-coded highlighting shows the source of each code section
 - **Manual Edit Recognition** - Distinguishes between user-typed code and other edit types
 - **Undo/Redo Tracking** - Tracks code changes from undo and redo operations
-- **Paste Operation Tracking** - Monitors and marks code that's been pasted from external sources like StackOverflow (requires installation of the browser extension and associated Native Host)
+- **Paste Operation Tracking** - Monitors and marks code that's been pasted from external sources like StackOverflow (requires installation of the browser extension and associated browser helper tool)
 - **Team Transparency** - Optionally share edit attribution with team members when using the "Repository" storage option, allowing others to see where AI-generated or pasted code was used
 - **Persistent History** - Maintains edit history across sessions
 
@@ -36,16 +36,16 @@ Hovering over a highlight gives further information about the type of change, wh
 
 Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=iann0036.tabd).
 
-To add web-based UI support and/or webpage clipboard support, you must also install the [browser extension](https://github.com/iann0036/tabd-extension) and its associated native host tool.
+To add web-based UI support and/or webpage clipboard support, you must also install the [browser extension](https://github.com/iann0036/tabd-extension) and its associated browser helper tool. Use the command `Tab'd: Install browser helper` to install the browser helper tool onto your machine.
 
 ## Usage
 
 Tab'd works automatically in the background once installed. It will:
 
-1. **Track all code changes** in supported file types
-2. **Classify edit types** based on how the code was added
-3. **Store tracking data** persistently for later analysis
-4. **Show visual indicators** when blame view is enabled
+- **Track all code changes** in supported file types
+- **Classify edit types** based on how the code was added
+- **Store tracking data** persistently for later analysis
+- **Show visual indicators** when blame view is enabled
 
 ### Commands
 
@@ -73,8 +73,8 @@ Tab'd uses safe, local-only defaults. You can configure Tab'd through settings:
 #### Storage Options
 
 - **Home Directory (default)** - Store data in your personal directory (private)
-- **Repository** - Store data in your project's `.tabd` directory (shared with team)
-- **Git Notes** - Store and push data automatically using custom-namespaced Git Notes (shared with team)
+- **Repository** - Store data in your project's `.tabd` directory (shared with team/repo)
+- **Git Notes** - Store and push data automatically using custom-namespaced Git Notes (shared with team/repo)
 
 ### Example Settings
 
@@ -94,6 +94,7 @@ The following extensions are known to be supported (though bugs will likely stil
 - **GitHub Copilot / GitHub Copilot Chat** (inline suggestions and edit/agent mode)
 - **Windsurf** (inline suggestions and edit/agent mode)
 - **Kiro** (inline suggestions and edit/agent mode)
+- **Other AI assistants** - (inline suggestions, unreliably)
 
 ## Privacy & Data
 
