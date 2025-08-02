@@ -77,7 +77,7 @@ Tab'd uses safe, local-only defaults. You can configure Tab'd through settings:
 
 #### Storage Options
 
-- **Home Directory (default)** - Store data in your personal directory (private)
+- **Home Directory (default)** - Store data in your personal `~/.tabd` directory (private)
 - **Repository** - Store data in your project's `.tabd` directory (shared with team/repo)
 - **Git Notes** - Store and push data automatically using custom-namespaced Git Notes (shared with team/repo)
 
