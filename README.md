@@ -52,6 +52,9 @@ Tab'd works automatically in the background once installed. It will:
 - **Store tracking data** persistently for later analysis
 - **Show visual indicators** when blame view is enabled
 
+> [!NOTE]  
+> Tab'd currently only works for files which have a filename. Untitled / draft files are not yet supported.
+
 ### Commands
 
 Access these commands via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
