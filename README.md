@@ -4,6 +4,8 @@
 
 Bring transparency to modern development with Tab'd - an IDE extension that tracks and visualizes AI-assisted coding and copy-paste operations in your codebase. Help your team understand code authorship and maintain accountability in an era of AI-powered development, while gaining insights into your own coding patterns.
 
+![](https://github.com/iann0036/iann0036/blob/master/static/tabd-demo.gif?raw=true)
+
 > [!WARNING]  
 > This extension is in active development and is not yet suitable for production use. Detection of AI-generated edits may not be reliable. Please [raise an issue](https://github.com/iann0036/tabd/issues) if you experience any problems.
 
