@@ -2,7 +2,7 @@
   <img src="https://github.com/iann0036/iann0036/blob/master/static/tabd_logo.png?raw=true" alt="Tab'd Logo" width="300px" />
 </p>
 
-Bring transparency to modern development with Tab'd - a VS Code extension that tracks and visualizes AI-assisted coding and copy-paste operations in your codebase. Help your team understand code authorship and maintain accountability in an era of AI-powered development, while gaining insights into your own coding patterns.
+Bring transparency to modern development with Tab'd - an IDE extension that tracks and visualizes AI-assisted coding and copy-paste operations in your codebase. Help your team understand code authorship and maintain accountability in an era of AI-powered development, while gaining insights into your own coding patterns.
 
 > [!WARNING]  
 > This extension is in active development and is not yet suitable for production use. Detection of AI-generated edits may not be reliable. Please [raise an issue](https://github.com/iann0036/tabd/issues) if you experience any problems.
@@ -34,7 +34,7 @@ Hovering over a highlight gives further information about the type of change, wh
 3. Search for "Tab'd"
 4. Click Install
 
-Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=iann0036.tabd).
+Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=iann0036.tabd) or [Open VSX Registry](https://open-vsx.org/extension/iann0036/tabd).
 
 To add web-based UI support and/or webpage clipboard support, you must also install the [browser extension](https://github.com/iann0036/tabd-extension) and its associated browser helper tool. Use the command `Tab'd: Install browser helper` to install the browser helper tool onto your machine.
 
@@ -110,4 +110,4 @@ If you find Tab'd useful, consider:
 
 - ⭐ Starring the [GitHub repository](https://github.com/iann0036/tabd)
 - 💝 [Sponsoring the project](https://github.com/sponsors/iann0036)
-- 📝 Leaving a review on the VS Code Marketplace
+- 📝 Leaving a review on the VS Code Marketplace / Open VSX Registry

@@ -16,6 +16,7 @@
     "Stack Overflow"
   ],
   "icon": "assets/tabd_logo.png",
+  "license": "AGPL-3.0-only",
   "version": "0.0.4",
   "engines": {
     "vscode": "^1.94.0"
