@@ -38,6 +38,9 @@ Hovering over a highlight gives further information about the type of change, wh
 
 Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=iann0036.tabd) or [Open VSX Registry](https://open-vsx.org/extension/iann0036/tabd).
 
+> [!NOTE]  
+> You may need to reload the IDE after installation for the extension to take effect.
+
 To add web-based UI support and/or webpage clipboard support, you must also install the [browser extension](https://github.com/iann0036/tabd-extension) and its associated browser helper tool. Use the command `Tab'd: Install browser helper` to install the browser helper tool onto your machine.
 
 ## Usage
