@@ -94,12 +94,10 @@ export async function installNativeHost(): Promise<void> {
     const hostName = 'com.iann0036.tabd';
 
     // Determine the correct directories for native messaging hosts
-    let installDir: string;
     let nativeMessagingDirs: { dir: string; browser: string }[];
 
     if (platform === 'darwin') {
         // macOS
-        installDir = '/usr/local/bin';
         nativeMessagingDirs = [
             { dir: path.join(os.homedir(), 'Library/Application Support/Google/Chrome/NativeMessagingHosts'), browser: 'Chrome' },
             { dir: path.join(os.homedir(), 'Library/Application Support/Chromium/NativeMessagingHosts'), browser: 'Chromium' },
@@ -108,7 +106,6 @@ export async function installNativeHost(): Promise<void> {
         ];
     } else if (platform === 'linux' || platform === 'freebsd' || platform === 'netbsd' || platform === 'openbsd') {
         // Linux and BSD systems
-        installDir = '/usr/local/bin';
         nativeMessagingDirs = [
             { dir: path.join(os.homedir(), '.config/google-chrome/NativeMessagingHosts'), browser: 'Chrome' },
             { dir: path.join(os.homedir(), '.config/chromium/NativeMessagingHosts'), browser: 'Chromium' },
@@ -117,7 +114,6 @@ export async function installNativeHost(): Promise<void> {
         ];
     } else if (platform === 'win32') {
         // Windows
-        installDir = path.join(os.homedir(), 'AppData', 'Local', 'tabd');
         nativeMessagingDirs = [
             { dir: path.join(os.homedir(), 'AppData/Local/Google/Chrome/User Data/NativeMessagingHosts'), browser: 'Chrome' },
             { dir: path.join(os.homedir(), 'AppData/Local/Chromium/User Data/NativeMessagingHosts'), browser: 'Chromium' },
@@ -128,36 +124,16 @@ export async function installNativeHost(): Promise<void> {
         throw new Error(`Unsupported operating system: ${platform}`);
     }
 
-    const targetBinaryPath = path.join(installDir, platform === 'win32' ? 'tabd-native-host.exe' : 'tabd-native-host');
+    // Use the source binary path directly instead of copying
+    const targetBinaryPath = sourceBinaryPath;
 
-    try {
-        // Create install directory if it doesn't exist
-        if (!fs.existsSync(installDir)) {
-            fs.mkdirSync(installDir, { recursive: true });
-        }
-
-        // Copy binary to installation directory
-        fs.copyFileSync(sourceBinaryPath, targetBinaryPath);
-
-        // Set executable permissions on Unix-like systems
-        if (platform !== 'win32') {
+    // Set executable permissions on Unix-like systems
+    if (platform !== 'win32') {
+        try {
             fs.chmodSync(targetBinaryPath, '755');
-        }
-
-        vscode.window.showInformationMessage('Browser helper installed');
-    } catch (error) {
-        // Try with elevated permissions on Unix-like systems
-        if (platform !== 'win32') {
-            try {
-                vscode.window.showInformationMessage('Installing browser helper requires elevated permissions...');
-                execSync(`sudo cp "${sourceBinaryPath}" "${targetBinaryPath}"`);
-                execSync(`sudo chmod 755 "${targetBinaryPath}"`);
-                vscode.window.showInformationMessage(`Browser helper installed to ${targetBinaryPath} (with sudo)`);
-            } catch (sudoError) {
-                throw new Error(`Failed to install browser helper even with sudo: ${sudoError instanceof Error ? sudoError.message : String(sudoError)}`);
-            }
-        } else {
-            throw new Error(`Failed to install browser helper: ${error instanceof Error ? error.message : String(error)}`);
+        } catch (error) {
+            // Ignore permission errors since the binary might already have correct permissions
+            console.warn(`Could not set executable permissions on ${targetBinaryPath}:`, error);
         }
     }
 
@@ -212,21 +188,52 @@ export async function installNativeHost(): Promise<void> {
 }
 
 function getNativeBinaryPath(): string {
-    const platform = os.platform();
-    
-    // Determine the correct directories for native messaging hosts
-    let installDir: string;
+    const extensionContext = vscode.extensions.getExtension('iann0036.tabd');
+    if (!extensionContext) {
+        throw new Error('Extension context not found');
+    }
 
-    if (platform === 'darwin' || platform === 'linux' || platform === 'freebsd' || platform === 'netbsd' || platform === 'openbsd') {
-        installDir = '/usr/local/bin';
+    const extensionPath = extensionContext.extensionPath;
+    const platform = os.platform();
+    const arch = os.arch();
+
+    // Determine the correct binary name
+    let binaryName: string;
+    if (platform === 'darwin') {
+        binaryName = arch === 'arm64' ? 'tabd-native-host-darwin-arm64' : 'tabd-native-host-darwin-amd64';
+    } else if (platform === 'linux') {
+        if (arch === 'x64') {
+            binaryName = 'tabd-native-host-linux-amd64';
+        } else if (arch === 'arm64') {
+            binaryName = 'tabd-native-host-linux-arm64';
+        } else if (arch === 'arm') {
+            binaryName = 'tabd-native-host-linux-arm';
+        } else if (arch === 'ia32') {
+            binaryName = 'tabd-native-host-linux-386';
+        } else {
+            throw new Error(`Unsupported Linux architecture: ${arch}`);
+        }
     } else if (platform === 'win32') {
-        installDir = path.join(os.homedir(), 'AppData', 'Local', 'tabd');
+        if (arch === 'x64') {
+            binaryName = 'tabd-native-host-windows-amd64.exe';
+        } else if (arch === 'arm64') {
+            binaryName = 'tabd-native-host-windows-arm64.exe';
+        } else if (arch === 'ia32') {
+            binaryName = 'tabd-native-host-windows-386.exe';
+        } else {
+            throw new Error(`Unsupported Windows architecture: ${arch}`);
+        }
+    } else if (platform === 'freebsd') {
+        binaryName = arch === 'x64' ? 'tabd-native-host-freebsd-amd64' : 'tabd-native-host-freebsd-386';
+    } else if (platform === 'netbsd') {
+        binaryName = arch === 'x64' ? 'tabd-native-host-netbsd-amd64' : 'tabd-native-host-netbsd-386';
+    } else if (platform === 'openbsd') {
+        binaryName = arch === 'x64' ? 'tabd-native-host-openbsd-amd64' : 'tabd-native-host-openbsd-386';
     } else {
         throw new Error(`Unsupported operating system: ${platform}`);
     }
 
-    const binaryName = platform === 'win32' ? 'tabd-native-host.exe' : 'tabd-native-host';
-    return path.join(installDir, binaryName);
+    return path.join(extensionPath, 'assets', 'nativehost', binaryName);
 }
 
 export function getClipboardContentsFromBrowserExtension(): ClipboardData {
