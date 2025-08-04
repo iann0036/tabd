@@ -33,7 +33,7 @@ Hovering over a highlight gives further information about the type of change, wh
 
 1. Open the IDE
 2. Go to the Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`)
-3. Search for "Tab'd"
+3. Search for "Tabd" (no apostrophe)
 4. Click Install
 
 Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=iann0036.tabd) or [Open VSX Registry](https://open-vsx.org/extension/iann0036/tabd).
