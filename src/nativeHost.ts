@@ -168,7 +168,7 @@ export async function installNativeHost(): Promise<void> {
         path: targetBinaryPath,
         type: 'stdio',
         allowed_origins: [
-            'chrome-extension://cnlfbljdfomffoofkilepnahcakenkcc/'
+            'chrome-extension://lemjjpeploikbpmkodmmkdjcjodboidn/'
         ]
     };
 
